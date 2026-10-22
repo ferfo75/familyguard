@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FamilyGuard</string>
+    <string name="tracking_notification_title">FamilyGuard activo</string>
+    <string name="tracking_notification_text">Compartiendo tu ubicación con tu familia</string>
+    <string name="sos_action_label">Enviar SOS</string>
+</resources>

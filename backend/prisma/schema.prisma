@@ -1,0 +1,133 @@
+// FamilyGuard — esquema de base de datos
+// Diseño propio, independiente de cualquier app de terceros.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Parent {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+
+  children     ChildDevice[]
+  geofences    Geofence[]
+  pairingCodes PairingCode[]
+  pushTokens   PushToken[]
+}
+
+model PairingCode {
+  id        String    @id @default(uuid())
+  code      String    @unique // código corto de 6 dígitos que se escribe en la app del chico
+  parent    Parent    @relation(fields: [parentId], references: [id])
+  parentId  String
+  childName String // nombre que el padre le puso al perfil antes de emparejar
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model ChildDevice {
+  id           String   @id @default(uuid())
+  parent       Parent   @relation(fields: [parentId], references: [id])
+  parentId     String
+  name         String
+  deviceModel  String?
+  deviceToken  String   @unique // JWT de larga duración que usa la app del chico para autenticarse
+  lastSeenAt   DateTime?
+  batteryLevel Int?
+  createdAt    DateTime @default(now())
+
+  locationPings   LocationPing[]
+  geofences       Geofence[]
+  geofenceEvents  GeofenceEvent[]
+  appUsageRecords AppUsageRecord[]
+  sosAlerts       SosAlert[]
+  blockedApps     BlockedApp[]
+}
+
+model LocationPing {
+  id            String      @id @default(uuid())
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDeviceId String
+  lat           Float
+  lng           Float
+  accuracyM     Float?
+  recordedAt    DateTime    @default(now())
+
+  @@index([childDeviceId, recordedAt])
+}
+
+model Geofence {
+  id            String      @id @default(uuid())
+  parent        Parent      @relation(fields: [parentId], references: [id])
+  parentId      String
+  childDevice   ChildDevice? @relation(fields: [childDeviceId], references: [id])
+  childDeviceId String? // null = aplica a todos los hijos de este padre
+  name          String
+  lat           Float
+  lng           Float
+  radiusMeters  Float
+  createdAt     DateTime    @default(now())
+
+  events GeofenceEvent[]
+}
+
+model GeofenceEvent {
+  id            String      @id @default(uuid())
+  geofence      Geofence    @relation(fields: [geofenceId], references: [id])
+  geofenceId    String
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDeviceId String
+  type          String // "ENTER" | "EXIT"
+  occurredAt    DateTime    @default(now())
+}
+
+model AppUsageRecord {
+  id            String      @id @default(uuid())
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDeviceId String
+  packageName   String
+  appName       String
+  date          DateTime // día calendario (medianoche UTC) al que corresponde el acumulado
+  usageMinutes  Int
+
+  @@unique([childDeviceId, packageName, date])
+}
+
+model BlockedApp {
+  id            String      @id @default(uuid())
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDeviceId String
+  packageName   String
+  dailyLimitMin Int? // null = bloqueada por completo
+
+  @@unique([childDeviceId, packageName])
+}
+
+model SosAlert {
+  id            String      @id @default(uuid())
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDeviceId String
+  lat           Float
+  lng           Float
+  message       String?
+  createdAt     DateTime    @default(now())
+  resolvedAt    DateTime?
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  parent    Parent   @relation(fields: [parentId], references: [id])
+  parentId  String
+  token     String   @unique
+  platform  String // "android"
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,19 @@
+# Backend
+backend/node_modules/
+backend/dist/
+backend/.env
+backend/dev-out.log
+backend/dev-err.log
+
+# Android
+*.apk
+**/local.properties
+**/build/
+**/.gradle/
+**/captures/
+**/*.iml
+**/.idea/
+dist/
+
+# Misc
+.DS_Store
