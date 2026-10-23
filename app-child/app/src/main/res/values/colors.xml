@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="launcher_background">#2E7D32</color>
+    <color name="launcher_background">#1B6E7E</color>
+    <color name="guardian_blue">#1B6E7E</color>
+    <color name="mist">#F4F8F9</color>
 </resources>

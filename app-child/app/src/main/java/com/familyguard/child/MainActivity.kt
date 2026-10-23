@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -26,6 +27,7 @@ import com.familyguard.child.data.Prefs
 import com.familyguard.child.network.ApiClient
 import com.familyguard.child.network.RedeemPairingRequest
 import com.familyguard.child.service.LocationTrackingService
+import com.familyguard.child.ui.theme.FamilyGuardChildTheme
 import com.familyguard.child.worker.LocationFallbackWorker
 import com.familyguard.child.worker.UsageReportWorker
 import kotlinx.coroutines.launch
@@ -42,7 +44,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            FamilyGuardChildTheme {
                 val isPaired by prefs.isPaired.collectAsState(initial = false)
                 val childName by prefs.childNameFlow.collectAsState(initial = null)
                 // Se recalcula cada vez que la Activity vuelve a primer plano (por
@@ -57,12 +59,38 @@ class MainActivity : ComponentActivity() {
                     onDispose { lifecycle.removeObserver(observer) }
                 }
 
+                var updateInfo by remember { mutableStateOf<com.familyguard.child.network.AppVersionInfo?>(null) }
+                var downloading by remember { mutableStateOf(false) }
+
                 Surface(Modifier.fillMaxSize()) {
                     if (isPaired) {
                         val setupComplete = remember(recheckTick) { isMandatorySetupComplete() }
                         if (setupComplete) {
                             PairedScreen(childName ?: "")
-                            LaunchedEffect(Unit) { onAlreadyPaired() }
+                            LaunchedEffect(Unit) {
+                                onAlreadyPaired()
+                                updateInfo = com.familyguard.child.update.AppUpdater.checkForUpdate(prefs)
+                            }
+                            updateInfo?.let { info ->
+                                AlertDialog(
+                                    onDismissRequest = { updateInfo = null },
+                                    title = { Text("Hay una versión nueva") },
+                                    text = { Text(info.notes ?: "Versión ${info.versionName} disponible.") },
+                                    confirmButton = {
+                                        Button(
+                                            enabled = !downloading,
+                                            onClick = {
+                                                downloading = true
+                                                lifecycleScope.launch {
+                                                    com.familyguard.child.update.AppUpdater.downloadAndInstall(this@MainActivity, info)
+                                                    downloading = false
+                                                }
+                                            }
+                                        ) { Text(if (downloading) "Descargando…" else "Actualizar") }
+                                    },
+                                    dismissButton = { TextButton(onClick = { updateInfo = null }) { Text("Ahora no") } },
+                                )
+                            }
                         } else {
                             MandatorySetupScreen(
                                 onContinue = { recheckTick++ }, // fuerza un recálculo al volver

@@ -57,3 +57,10 @@ data class SosAlert(
 data class SosAlertsResponse(val alerts: List<SosAlert>)
 
 data class RegisterPushTokenRequest(val token: String)
+
+data class AppVersionInfo(
+    val versionCode: Int,
+    val versionName: String,
+    val downloadUrl: String,
+    val notes: String?,
+)

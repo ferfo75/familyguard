@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -22,7 +23,9 @@ import com.familyguard.parent.data.Prefs
 import com.familyguard.parent.network.ChildLatest
 import com.familyguard.parent.network.SocketManager
 import com.familyguard.parent.ui.*
+import com.familyguard.parent.ui.theme.FamilyGuardParentTheme
 import com.familyguard.parent.util.NavigationIntents
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /** Datos de una alerta de pánico recibida en vivo por socket, para el diálogo global. */
@@ -38,11 +41,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            FamilyGuardParentTheme {
                 Surface {
                     val isLoggedIn by prefs.isLoggedIn.collectAsState(initial = false)
                     val token by prefs.tokenFlow.collectAsState(initial = null)
                     var activeSos by remember { mutableStateOf<SosUi?>(null) }
+                    var updateInfo by remember { mutableStateOf<com.familyguard.parent.network.AppVersionInfo?>(null) }
+                    var downloadingUpdate by remember { mutableStateOf(false) }
 
                     LaunchedEffect(token) {
                         if (token != null) {
@@ -57,6 +62,7 @@ class MainActivity : ComponentActivity() {
                                     message = if (json.isNull("message") || !json.has("message")) null else json.getString("message"),
                                 )
                             }
+                            updateInfo = com.familyguard.parent.update.AppUpdater.checkForUpdate(prefs)
                         }
                     }
 
@@ -67,6 +73,27 @@ class MainActivity : ComponentActivity() {
                     }
 
                     activeSos?.let { sos -> SosAlertDialog(sos, onDismiss = { activeSos = null }) }
+
+                    updateInfo?.let { info ->
+                        AlertDialog(
+                            onDismissRequest = { updateInfo = null },
+                            title = { Text("Hay una versión nueva") },
+                            text = { Text(info.notes ?: "Versión ${info.versionName} disponible.") },
+                            confirmButton = {
+                                Button(
+                                    enabled = !downloadingUpdate,
+                                    onClick = {
+                                        downloadingUpdate = true
+                                        lifecycleScope.launch {
+                                            com.familyguard.parent.update.AppUpdater.downloadAndInstall(this@MainActivity, info)
+                                            downloadingUpdate = false
+                                        }
+                                    }
+                                ) { Text(if (downloadingUpdate) "Descargando…" else "Actualizar") }
+                            },
+                            dismissButton = { TextButton(onClick = { updateInfo = null }) { Text("Ahora no") } },
+                        )
+                    }
                 }
             }
         }

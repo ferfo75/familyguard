@@ -13,6 +13,9 @@
     <!-- Para la nota de voz opcional del SOS, que el hijo graba por decisión
          propia al mandar la alerta (no es un micrófono remoto). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Deja que la propia app abra el instalador para la actualización con
+         un toque, sin pasar por fuera cada vez. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Necesario para pedirle al usuario que excluya a FamilyGuard del ahorro
          de batería. Motorola (igual que la mayoría de los fabricantes) mata
          servicios en segundo plano agresivamente si no se otorga esto, y el
@@ -79,6 +82,16 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <service
             android:name=".push.ChildFirebaseMessagingService"

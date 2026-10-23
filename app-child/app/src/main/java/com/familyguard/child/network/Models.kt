@@ -26,3 +26,10 @@ data class UsageReportRequest(val date: String, val apps: List<UsageAppEntry>)
 
 data class BlockedAppRule(val packageName: String, val dailyLimitMin: Int?)
 data class BlockedAppsResponse(val rules: List<BlockedAppRule>)
+
+data class AppVersionInfo(
+    val versionCode: Int,
+    val versionName: String,
+    val downloadUrl: String,
+    val notes: String?,
+)

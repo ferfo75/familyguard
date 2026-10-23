@@ -7,6 +7,8 @@ backend/dev-err.log
 
 # Android
 *.apk
+# Excepción: el APK que el backend sirve para la auto-actualización sí va al repo.
+!backend/public/apks/*.apk
 **/local.properties
 **/build/
 **/.gradle/

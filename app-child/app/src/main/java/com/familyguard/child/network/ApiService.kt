@@ -24,4 +24,7 @@ interface ApiService {
 
     @GET("usage/blocked-apps")
     suspend fun getBlockedApps(): Response<BlockedAppsResponse>
+
+    @GET("app/child/latest")
+    suspend fun getLatestAppVersion(): Response<AppVersionInfo>
 }
