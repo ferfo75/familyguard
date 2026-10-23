@@ -10,10 +10,13 @@ import { geofenceRouter } from "./routes/geofence";
 import { usageRouter } from "./routes/usage";
 import { sosRouter } from "./routes/sos";
 import { pushRouter } from "./routes/push";
+import { commandsRouter } from "./routes/commands";
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// El límite default de express.json() (100kb) no alcanza para el audio del
+// SOS en base64; lo subimos un poco con margen.
+app.use(express.json({ limit: "3mb" }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
@@ -23,6 +26,7 @@ app.use("/geofences", geofenceRouter);
 app.use("/usage", usageRouter);
 app.use("/sos", sosRouter);
 app.use("/push", pushRouter);
+app.use("/commands", commandsRouter);
 
 const httpServer = createServer(app);
 initSocket(httpServer);

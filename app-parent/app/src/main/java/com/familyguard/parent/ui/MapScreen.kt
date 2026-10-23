@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +30,7 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MarkerComposable
+import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.launch
 
@@ -36,9 +39,12 @@ private data class ChildMapState(
     val childDeviceId: String,
     val name: String,
     val position: LatLng,
+    val speedMs: Float?,
     val batteryLevel: Int?,
     val lastSeenAt: String?,
 )
+
+private fun Float?.toKmh(): String? = this?.let { "%.0f km/h".format(it * 3.6f) }
 
 // Una paleta fija y corta: alcanza para distinguir varios hijos sin repetir
 // colores demasiado seguido, y es más clara que generar colores al azar.
@@ -60,6 +66,10 @@ fun MapScreen(prefs: Prefs) {
     var satelliteOn by remember { mutableStateOf(false) }
     var selectedForDirections by remember { mutableStateOf<ChildMapState?>(null) }
     var didInitialFit by remember { mutableStateOf(false) }
+    // Hijo cuya ruta recorrida se está mostrando ahora (null = ninguna).
+    var routeChildId by remember { mutableStateOf<String?>(null) }
+    var routePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
+    var ringStatus by remember { mutableStateOf<String?>(null) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(0.0, 0.0), 2f)
@@ -73,7 +83,7 @@ fun MapScreen(prefs: Prefs) {
                 .associate { c ->
                     c.childDeviceId to ChildMapState(
                         c.childDeviceId, c.childName, LatLng(c.location!!.lat, c.location.lng),
-                        c.batteryLevel, c.lastSeenAt,
+                        c.location.speedMs, c.batteryLevel, c.lastSeenAt,
                     )
                 }
         }
@@ -82,10 +92,23 @@ fun MapScreen(prefs: Prefs) {
             val id = json.optString("childDeviceId")
             val lat = json.optDouble("lat")
             val lng = json.optDouble("lng")
+            val speed = if (json.has("speedMs") && !json.isNull("speedMs")) json.optDouble("speedMs").toFloat() else null
             val battery = if (json.has("batteryLevel") && !json.isNull("batteryLevel")) json.optInt("batteryLevel") else null
-            val existingName = children[id]?.name ?: id
-            children = children + (id to ChildMapState(id, existingName, LatLng(lat, lng), battery, null))
+            val existing = children[id]
+            children = children + (id to ChildMapState(id, existing?.name ?: id, LatLng(lat, lng), speed, battery, existing?.lastSeenAt))
+            // Si estamos mostrando la ruta de este hijo, vamos sumando el
+            // punto nuevo para que el trazo se dibuje solo, en vivo.
+            if (routeChildId == id) routePoints = routePoints + LatLng(lat, lng)
         }
+    }
+
+    // Trae el recorrido de las últimas 24h cuando el padre elige "Ver ruta".
+    LaunchedEffect(routeChildId) {
+        val id = routeChildId
+        if (id == null) { routePoints = emptyList(); return@LaunchedEffect }
+        val api = ApiClient.create(prefs)
+        routePoints = runCatching { api.getHistory(id) }.getOrNull()?.body()?.points
+            ?.map { LatLng(it.lat, it.lng) } ?: emptyList()
     }
 
     // Encuadra a todos los hijos la primera vez que tenemos sus posiciones;
@@ -122,6 +145,12 @@ fun MapScreen(prefs: Prefs) {
                     ChildMarkerBubble(name = child.name, color = color)
                 }
             }
+            if (routePoints.size > 1) {
+                val routeColor = children[routeChildId]?.let { child ->
+                    children.values.toList().indexOf(child).let { markerColors[it % markerColors.size] }
+                } ?: Color.Blue
+                Polyline(points = routePoints, color = routeColor, width = 8f)
+            }
         }
 
         // Botón flotante: alterna entre mapa normal y satelital.
@@ -143,11 +172,33 @@ fun MapScreen(prefs: Prefs) {
             childName = child.name,
             lastSeenAt = child.lastSeenAt,
             batteryLevel = child.batteryLevel,
+            speedLabel = child.speedMs.toKmh(),
+            showingRoute = routeChildId == child.childDeviceId,
+            onToggleRoute = {
+                routeChildId = if (routeChildId == child.childDeviceId) null else child.childDeviceId
+            },
+            onRing = {
+                scope.launch {
+                    val api = ApiClient.create(prefs)
+                    val ok = runCatching { api.ringDevice(child.childDeviceId) }.getOrNull()?.isSuccessful == true
+                    ringStatus = if (ok) "Sonando en el teléfono de ${child.name}…" else "No se pudo: el teléfono está sin conexión ahora mismo."
+                }
+            },
             onDismiss = { selectedForDirections = null },
             onGoogleMaps = { NavigationIntents.openGoogleMapsDirections(context, child.position.latitude, child.position.longitude) },
             onWaze = { NavigationIntents.openWazeDirections(context, child.position.latitude, child.position.longitude) },
             onOtherApp = { NavigationIntents.openChooser(context, child.position.latitude, child.position.longitude, child.name) },
         )
+    }
+
+    ringStatus?.let { message ->
+        LaunchedEffect(message) {
+            kotlinx.coroutines.delay(3000)
+            ringStatus = null
+        }
+        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.BottomCenter) {
+            Card { Text(message, Modifier.padding(16.dp)) }
+        }
     }
 }
 
@@ -179,6 +230,10 @@ private fun DirectionsSheet(
     childName: String,
     lastSeenAt: String?,
     batteryLevel: Int?,
+    speedLabel: String?,
+    showingRoute: Boolean,
+    onToggleRoute: () -> Unit,
+    onRing: () -> Unit,
     onDismiss: () -> Unit,
     onGoogleMaps: () -> Unit,
     onWaze: () -> Unit,
@@ -191,8 +246,25 @@ private fun DirectionsSheet(
             val details = buildString {
                 lastSeenAt?.let { append("Última actualización: $it") }
                 batteryLevel?.let { if (isNotEmpty()) append(" · "); append("🔋$it%") }
+                speedLabel?.let { if (isNotEmpty()) append(" · "); append("🚗$it") }
             }
             if (details.isNotEmpty()) Text(details, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(16.dp))
+
+            Row(Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onToggleRoute, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Filled.Route, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (showingRoute) "Ocultar ruta" else "Ver ruta")
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = onRing, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Filled.VolumeUp, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Hacer sonar")
+                }
+            }
+
             Spacer(Modifier.height(16.dp))
             Text("Ir hasta ahí con:", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(8.dp))

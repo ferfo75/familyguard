@@ -8,7 +8,7 @@ data class AuthResponse(val token: String, val parent: ParentInfo)
 data class CreatePairingRequest(val childName: String)
 data class CreatePairingResponse(val code: String, val expiresAt: String)
 
-data class LatestLocation(val lat: Double, val lng: Double, val recordedAt: String)
+data class LatestLocation(val lat: Double, val lng: Double, val speedMs: Float?, val recordedAt: String)
 data class ChildLatest(
     val childDeviceId: String,
     val childName: String,
@@ -18,7 +18,7 @@ data class ChildLatest(
 )
 data class LatestLocationsResponse(val children: List<ChildLatest>)
 
-data class HistoryPoint(val lat: Double, val lng: Double, val recordedAt: String)
+data class HistoryPoint(val lat: Double, val lng: Double, val speedMs: Float?, val recordedAt: String)
 data class HistoryResponse(val points: List<HistoryPoint>)
 
 data class Geofence(
@@ -50,6 +50,7 @@ data class SosAlert(
     val lat: Double,
     val lng: Double,
     val message: String?,
+    val audioClipBase64: String?,
     val createdAt: String,
     val resolvedAt: String?,
 )

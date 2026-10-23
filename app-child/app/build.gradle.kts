@@ -12,8 +12,8 @@ android {
         applicationId = "com.familyguard.child"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 4
+        versionName = "0.4.0"
         buildConfigField(
             "String",
             "API_BASE_URL",
@@ -60,4 +60,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     implementation("com.google.firebase:firebase-messaging-ktx:24.1.0")
+
+    implementation("io.socket:socket.io-client:2.1.1") {
+        exclude(group = "org.json", module = "json")
+    }
 }

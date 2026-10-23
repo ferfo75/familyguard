@@ -11,6 +11,7 @@ const pingSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   accuracyM: z.number().optional(),
+  speedMs: z.number().min(0).optional(),
   batteryLevel: z.number().int().min(0).max(100).optional(),
 });
 
@@ -21,10 +22,10 @@ const pingSchema = z.object({
 locationRouter.post("/ping", requireChildAuth, async (req, res) => {
   const parsed = pingSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
-  const { lat, lng, accuracyM, batteryLevel } = parsed.data;
+  const { lat, lng, accuracyM, speedMs, batteryLevel } = parsed.data;
 
   const ping = await db.locationPing.create({
-    data: { childDeviceId: req.childDeviceId!, lat, lng, accuracyM },
+    data: { childDeviceId: req.childDeviceId!, lat, lng, accuracyM, speedMs },
   });
   await db.childDevice.update({
     where: { id: req.childDeviceId! },
@@ -36,6 +37,7 @@ locationRouter.post("/ping", requireChildAuth, async (req, res) => {
     lat,
     lng,
     accuracyM,
+    speedMs,
     batteryLevel,
     recordedAt: ping.recordedAt,
   });
@@ -59,7 +61,9 @@ locationRouter.get("/latest", requireParentAuth, async (req, res) => {
         childName: child.name,
         batteryLevel: child.batteryLevel,
         lastSeenAt: child.lastSeenAt,
-        location: ping ? { lat: ping.lat, lng: ping.lng, recordedAt: ping.recordedAt } : null,
+        location: ping
+          ? { lat: ping.lat, lng: ping.lng, speedMs: ping.speedMs, recordedAt: ping.recordedAt }
+          : null,
       };
     })
   );
@@ -76,7 +80,7 @@ locationRouter.get("/:childDeviceId/history", requireParentAuth, async (req, res
   const pings = await db.locationPing.findMany({
     where: { childDeviceId, recordedAt: { gte: from } },
     orderBy: { recordedAt: "asc" },
-    select: { lat: true, lng: true, recordedAt: true },
+    select: { lat: true, lng: true, speedMs: true, recordedAt: true },
   });
   res.json({ points: pings });
 });

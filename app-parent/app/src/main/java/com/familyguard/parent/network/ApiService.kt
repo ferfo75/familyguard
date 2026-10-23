@@ -47,4 +47,7 @@ interface ApiService {
 
     @POST("push/register")
     suspend fun registerPushToken(@Body body: RegisterPushTokenRequest): Response<Unit>
+
+    @POST("commands/{childDeviceId}/ring")
+    suspend fun ringDevice(@Path("childDeviceId") childDeviceId: String): Response<Unit>
 }

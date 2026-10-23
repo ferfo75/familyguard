@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Para la nota de voz opcional del SOS, que el hijo graba por decisión
+         propia al mandar la alerta (no es un micrófono remoto). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Necesario para pedirle al usuario que excluya a FamilyGuard del ahorro
          de batería. Motorola (igual que la mayoría de los fabricantes) mata
          servicios en segundo plano agresivamente si no se otorga esto, y el
@@ -47,6 +50,12 @@
         <receiver
             android:name=".sos.SosActionReceiver"
             android:exported="false" />
+
+        <activity
+            android:name=".sos.SosActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance" />
 
         <receiver
             android:name=".boot.BootReceiver"

@@ -11,7 +11,13 @@ const sosSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   message: z.string().optional(),
+  // Nota de voz corta que el hijo graba por su propia decisión al mandar la
+  // alerta (no algo que el padre activa a distancia) — opcional, base64.
+  audioClipBase64: z.string().max(2_000_000).optional(), // ~1.5MB en base64, de sobra para 15-20s comprimidos
 });
+
+// express.json() necesita un límite más alto para aceptar el audio en
+// base64 sin cortar la request; se configura en src/index.ts.
 
 // Botón de pánico: la app del hijo manda esto y el padre se entera al
 // instante por socket.io + notificación push, con prioridad sobre cualquier
@@ -30,6 +36,7 @@ sosRouter.post("/", requireChildAuth, async (req, res) => {
     lat: alert.lat,
     lng: alert.lng,
     message: alert.message,
+    hasAudio: Boolean(alert.audioClipBase64),
     createdAt: alert.createdAt,
   });
 
@@ -37,6 +44,16 @@ sosRouter.post("/", requireChildAuth, async (req, res) => {
   await sendPushToTokens(tokens, "🆘 Alerta de " + child?.name, alert.message || "Pidió ayuda. Tocá para ver su ubicación.");
 
   res.status(201).json({ ok: true, alert });
+});
+
+// Por si el hijo graba la nota de voz un ratito después de haber mandado ya
+// la alerta (no queremos que grabar el audio demore el aviso instantáneo).
+sosRouter.post("/:id/audio", requireChildAuth, async (req, res) => {
+  const { audioClipBase64 } = z.object({ audioClipBase64: z.string().max(2_000_000) }).parse(req.body);
+  const alert = await db.sosAlert.findFirst({ where: { id: req.params.id, childDeviceId: req.childDeviceId! } });
+  if (!alert) return res.status(404).json({ error: "not_found" });
+  await db.sosAlert.update({ where: { id: alert.id }, data: { audioClipBase64 } });
+  res.json({ ok: true });
 });
 
 sosRouter.get("/", requireParentAuth, async (req, res) => {
@@ -54,6 +71,7 @@ sosRouter.get("/", requireParentAuth, async (req, res) => {
       lat: a.lat,
       lng: a.lng,
       message: a.message,
+      audioClipBase64: a.audioClipBase64,
       createdAt: a.createdAt,
       resolvedAt: a.resolvedAt,
     })),

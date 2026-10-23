@@ -1,8 +1,11 @@
 package com.familyguard.parent.ui
 
+import android.media.MediaPlayer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -13,6 +16,7 @@ import com.familyguard.parent.network.ApiClient
 import com.familyguard.parent.network.SosAlert
 import com.familyguard.parent.util.NavigationIntents
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** Historial de alertas de pánico, más recientes primero. */
 @Composable
@@ -48,6 +52,14 @@ fun SosScreen(prefs: Prefs) {
                         Button(onClick = { NavigationIntents.openGoogleMapsDirections(context, alert.lat, alert.lng) }) {
                             Text("Ir hasta ahí")
                         }
+                        if (!alert.audioClipBase64.isNullOrEmpty()) {
+                            Spacer(Modifier.width(8.dp))
+                            OutlinedButton(onClick = { playAudioClip(context, alert.audioClipBase64) }) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Escuchar")
+                            }
+                        }
                         if (alert.resolvedAt == null) {
                             Spacer(Modifier.width(8.dp))
                             TextButton(onClick = {
@@ -61,6 +73,19 @@ fun SosScreen(prefs: Prefs) {
                     }
                 }
             }
+        }
+    }
+}
+
+private fun playAudioClip(context: android.content.Context, base64: String) {
+    runCatching {
+        val bytes = android.util.Base64.decode(base64, android.util.Base64.NO_WRAP)
+        val file = File.createTempFile("sos_audio", ".m4a", context.cacheDir).apply { writeBytes(bytes) }
+        MediaPlayer().apply {
+            setDataSource(file.absolutePath)
+            setOnCompletionListener { release(); file.delete() }
+            prepare()
+            start()
         }
     }
 }

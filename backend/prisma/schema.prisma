@@ -60,6 +60,7 @@ model LocationPing {
   lat           Float
   lng           Float
   accuracyM     Float?
+  speedMs       Float? // velocidad instantánea en m/s que reporta el GPS; null si el dispositivo no la informó
   recordedAt    DateTime    @default(now())
 
   @@index([childDeviceId, recordedAt])
@@ -119,6 +120,11 @@ model SosAlert {
   lat           Float
   lng           Float
   message       String?
+  // Mensaje de voz corto (10-15s) que el hijo graba a propósito al mandar la
+  // alerta — decisión suya, no algo que el padre activa a distancia. Se
+  // guarda en base64 directo en la fila: son clips cortos, no vale la pena
+  // un bucket de almacenamiento aparte para este volumen.
+  audioClipBase64 String?
   createdAt     DateTime    @default(now())
   resolvedAt    DateTime?
 }
