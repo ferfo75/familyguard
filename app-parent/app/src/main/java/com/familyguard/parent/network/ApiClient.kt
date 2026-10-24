@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 class AuthInterceptor(private val prefs: Prefs) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -27,6 +28,13 @@ object ApiClient {
     fun create(prefs: Prefs): ApiService {
         val client = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor(prefs))
+            // Render (plan gratis) tarda hasta ~50s en despertar si estaba
+            // dormido; el timeout corto por defecto de OkHttp (10s) hacía que
+            // esos pedidos fallaran en silencio (ej: nunca aparecía el aviso
+            // de actualización).
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .build()
 
         return Retrofit.Builder()

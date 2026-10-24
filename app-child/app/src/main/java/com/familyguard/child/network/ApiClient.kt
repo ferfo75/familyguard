@@ -8,6 +8,7 @@ import okhttp3.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import com.familyguard.child.data.Prefs
+import java.util.concurrent.TimeUnit
 
 /** Agrega el deviceToken guardado a toda request, salvo el propio emparejamiento. */
 class AuthInterceptor(private val prefs: Prefs) : Interceptor {
@@ -27,6 +28,12 @@ object ApiClient {
     fun create(prefs: Prefs): ApiService {
         val client = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor(prefs))
+            // Render (plan gratis) tarda hasta ~50s en despertar si estaba
+            // dormido; con el timeout corto por defecto (10s) esos pedidos
+            // fallaban en silencio.
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .build()
 
         return Retrofit.Builder()
