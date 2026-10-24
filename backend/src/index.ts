@@ -14,6 +14,7 @@ import { commandsRouter } from "./routes/commands";
 import { appVersionRouter } from "./routes/appVersion";
 import { childrenRouter } from "./routes/children";
 import { placesRouter } from "./routes/places";
+import { summaryRouter } from "./routes/summary";
 import path from "path";
 
 const app = express();
@@ -32,6 +33,7 @@ app.use("/apks", express.static(path.join(__dirname, "..", "public", "apks")));
 app.use("/auth", authRouter);
 app.use("/location", locationRouter);
 app.use("/location", placesRouter);
+app.use("/location", summaryRouter);
 app.use("/geofences", geofenceRouter);
 app.use("/usage", usageRouter);
 app.use("/sos", sosRouter);

@@ -1,14 +1,11 @@
 import { Router } from "express";
 import { db } from "../db";
 import { requireParentAuth } from "../middleware/auth";
+import { clusterPings } from "../utils/clustering";
 
 export const placesRouter = Router();
 
 const WINDOW_DAYS = 14;
-// Agrupamos pings en una grilla de ~110m (1 milésima de grado): no es un
-// clustering sofisticado, pero alcanza para detectar "pasa mucho tiempo
-// cerca de acá" sin inventar nada que no esté en los datos reales.
-const GRID_FACTOR = 1000;
 const MIN_PINGS = 15;
 const MIN_DISTINCT_DAYS = 3;
 const MAX_PLACES = 6;
@@ -28,37 +25,6 @@ placesRouter.get("/:childDeviceId/frequent-places", requireParentAuth, async (re
     select: { lat: true, lng: true, recordedAt: true },
   });
 
-  type Cluster = { lat: number; lng: number; count: number; days: Set<string>; hours: number[] };
-  const clusters = new Map<string, Cluster>();
-
-  for (const ping of pings) {
-    const key = `${Math.round(ping.lat * GRID_FACTOR)},${Math.round(ping.lng * GRID_FACTOR)}`;
-    const existing = clusters.get(key);
-    const dayKey = ping.recordedAt.toISOString().slice(0, 10);
-    const hour = ping.recordedAt.getUTCHours();
-    if (existing) {
-      existing.lat += ping.lat;
-      existing.lng += ping.lng;
-      existing.count += 1;
-      existing.days.add(dayKey);
-      existing.hours.push(hour);
-    } else {
-      clusters.set(key, { lat: ping.lat, lng: ping.lng, count: 1, days: new Set([dayKey]), hours: [hour] });
-    }
-  }
-
-  const places = Array.from(clusters.values())
-    .filter((c) => c.count >= MIN_PINGS && c.days.size >= MIN_DISTINCT_DAYS)
-    .map((c) => ({
-      lat: c.lat / c.count,
-      lng: c.lng / c.count,
-      visitDays: c.days.size,
-      totalPings: c.count,
-      typicalFromHour: Math.min(...c.hours),
-      typicalToHour: Math.max(...c.hours),
-    }))
-    .sort((a, b) => b.totalPings - a.totalPings)
-    .slice(0, MAX_PLACES);
-
+  const places = clusterPings(pings, { minPings: MIN_PINGS, minDistinctDays: MIN_DISTINCT_DAYS, maxPlaces: MAX_PLACES });
   res.json({ places, windowDays: WINDOW_DAYS });
 });

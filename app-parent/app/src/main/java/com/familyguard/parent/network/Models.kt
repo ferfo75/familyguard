@@ -37,6 +37,8 @@ data class FrequentPlace(
 )
 data class FrequentPlacesResponse(val places: List<FrequentPlace>, val windowDays: Int)
 
+data class DailySummaryResponse(val summary: String, val generatedByAi: Boolean)
+
 data class Geofence(
     val id: String,
     val name: String,

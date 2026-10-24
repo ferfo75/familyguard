@@ -27,6 +27,9 @@ interface ApiService {
     @GET("location/{childDeviceId}/frequent-places")
     suspend fun getFrequentPlaces(@Path("childDeviceId") childDeviceId: String): Response<FrequentPlacesResponse>
 
+    @GET("location/{childDeviceId}/daily-summary")
+    suspend fun getDailySummary(@Path("childDeviceId") childDeviceId: String): Response<DailySummaryResponse>
+
     @GET("geofences")
     suspend fun getGeofences(): Response<GeofencesResponse>
 

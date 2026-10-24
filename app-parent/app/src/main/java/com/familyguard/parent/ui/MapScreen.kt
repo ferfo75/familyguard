@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Navigation
@@ -133,6 +134,11 @@ fun MapScreen(prefs: Prefs) {
     var frequentPlacesFor by remember { mutableStateOf<ChildMapState?>(null) }
     var frequentPlaces by remember { mutableStateOf<List<FrequentPlace>>(emptyList()) }
     var loadingFrequentPlaces by remember { mutableStateOf(false) }
+    // Resumen en lenguaje natural del día del hijo, armado con IA (Gemini) a
+    // partir de sus propios datos reales — no inventa nada.
+    var dailySummaryFor by remember { mutableStateOf<ChildMapState?>(null) }
+    var dailySummaryText by remember { mutableStateOf<String?>(null) }
+    var loadingDailySummary by remember { mutableStateOf(false) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(0.0, 0.0), 2f)
@@ -194,6 +200,17 @@ fun MapScreen(prefs: Prefs) {
         val api = ApiClient.create(prefs)
         frequentPlaces = runCatching { api.getFrequentPlaces(child.childDeviceId) }.getOrNull()?.body()?.places ?: emptyList()
         loadingFrequentPlaces = false
+    }
+
+    // Trae el resumen del día cuando el padre lo pide para un hijo.
+    LaunchedEffect(dailySummaryFor) {
+        val child = dailySummaryFor
+        if (child == null) { dailySummaryText = null; return@LaunchedEffect }
+        loadingDailySummary = true
+        val api = ApiClient.create(prefs)
+        val response = runCatching { api.getDailySummary(child.childDeviceId) }.getOrNull()?.body()
+        dailySummaryText = response?.summary ?: "No se pudo generar el resumen. Probá de nuevo en un rato."
+        loadingDailySummary = false
     }
 
     // Encuadra a todos los hijos la primera vez que tenemos sus posiciones;
@@ -305,6 +322,7 @@ fun MapScreen(prefs: Prefs) {
                 replayTick++
             },
             onFrequentPlaces = { frequentPlacesFor = child; selectedForDirections = null },
+            onDailySummary = { dailySummaryFor = child; selectedForDirections = null },
             onRing = { confirmRingFor = child; selectedForDirections = null },
             onStopRing = {
                 scope.launch {
@@ -346,6 +364,23 @@ fun MapScreen(prefs: Prefs) {
             loading = loadingFrequentPlaces,
             onOpenInMaps = { place -> NavigationIntents.openGoogleMapsDirections(context, place.lat, place.lng) },
             onDismiss = { frequentPlacesFor = null },
+        )
+    }
+
+    dailySummaryFor?.let { child ->
+        AlertDialog(
+            onDismissRequest = { dailySummaryFor = null },
+            title = { Text("Resumen del día de ${child.name}") },
+            text = {
+                if (loadingDailySummary) {
+                    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    Text(dailySummaryText ?: "")
+                }
+            },
+            confirmButton = { TextButton(onClick = { dailySummaryFor = null }) { Text("Cerrar") } },
         )
     }
 
@@ -464,6 +499,7 @@ private fun DirectionsSheet(
     activityLabel: String?,
     onPlayRoute: () -> Unit,
     onFrequentPlaces: () -> Unit,
+    onDailySummary: () -> Unit,
     onRing: () -> Unit,
     onStopRing: () -> Unit,
     onDismiss: () -> Unit,
@@ -508,6 +544,12 @@ private fun DirectionsSheet(
                 Icon(Icons.Filled.Place, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
                 Text("Lugares frecuentes")
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { onDailySummary(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("Resumen del día (IA)")
             }
 
             Spacer(Modifier.height(16.dp))
