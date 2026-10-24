@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "712399728601",
+    "project_id": "familyguard-4cab5",
+    "storage_bucket": "familyguard-4cab5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:712399728601:android:e84ac723418a526fd1f3c8",
+        "android_client_info": {
+          "package_name": "com.familyguard.child"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDb1A_WuRo1pPlebhVcjcmx4l-aWAbT_iw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:712399728601:android:3c55c63064a9fae6d1f3c8",
+        "android_client_info": {
+          "package_name": "com.familyguard.parent"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDb1A_WuRo1pPlebhVcjcmx4l-aWAbT_iw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

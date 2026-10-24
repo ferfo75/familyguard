@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -12,8 +13,8 @@ android {
         applicationId = "com.familyguard.parent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.6.2"
+        versionCode = 10
+        versionName = "0.6.3"
         buildConfigField(
             "String", "API_BASE_URL",
             "\"${project.findProperty("FAMILYGUARD_API_BASE_URL") ?: "http://10.0.2.2:4000/"}\""
