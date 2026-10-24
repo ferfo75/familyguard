@@ -5,10 +5,10 @@ export const appVersionRouter = Router();
 // Se actualiza a mano cada vez que se sube un APK nuevo a public/apks/.
 // Simple a propósito: no vale la pena una tabla en la base para esto.
 const CHILD_APP_VERSION = {
-  versionCode: 9,
-  versionName: "0.6.3",
+  versionCode: 10,
+  versionName: "0.6.4",
   downloadUrl: "/apks/familyguard-hijo-latest.apk",
-  notes: "Al sonar, ahora se abre una pantalla explicando que los padres llaman, con botón para dejar de sonar. El padre también puede cortarlo a distancia.",
+  notes: "Permiso agregado para que la pantalla de \"te están llamando\" se abra sola en Android 14+ (antes podía quedar solo como notificación).",
 };
 
 const PARENT_APP_VERSION = {

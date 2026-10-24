@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Sin esto, en Android 14+ la notificación de "hacer sonar" no abre
+         sola la pantalla con el aviso: queda solo como una notificación
+         más que hay que tocar a mano. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- Para la nota de voz opcional del SOS, que el hijo graba por decisión
          propia al mandar la alerta (no es un micrófono remoto). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
