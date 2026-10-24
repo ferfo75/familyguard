@@ -26,12 +26,21 @@ object ChildSocketManager {
         socket?.on("command:ring") { listener() }
     }
 
-    /** Conecta y deja escuchando "hacer sonar" en un solo paso, para no repetir
-     * la secuencia en cada lugar que puede necesitar levantar el socket
-     * (el servicio en primer plano y, de respaldo, el worker periódico). */
-    fun connectAndListenForRing(deviceToken: String, onRing: () -> Unit) {
+    /** El padre también puede cortar el sonido a distancia desde su propia
+     * app (por ejemplo si tocó "Hacer sonar" sin querer). */
+    fun onStopRingCommand(listener: () -> Unit) {
+        socket?.off("command:stopRing")
+        socket?.on("command:stopRing") { listener() }
+    }
+
+    /** Conecta y deja escuchando "hacer sonar"/"dejar de sonar" en un solo
+     * paso, para no repetir la secuencia en cada lugar que puede necesitar
+     * levantar el socket (el servicio en primer plano y, de respaldo, el
+     * worker periódico). */
+    fun connectAndListenForRing(deviceToken: String, onRing: () -> Unit, onStopRing: () -> Unit) {
         connect(deviceToken)
         onRingCommand(onRing)
+        onStopRingCommand(onStopRing)
     }
 
     fun disconnect() {

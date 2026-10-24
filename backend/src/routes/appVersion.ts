@@ -5,17 +5,17 @@ export const appVersionRouter = Router();
 // Se actualiza a mano cada vez que se sube un APK nuevo a public/apks/.
 // Simple a propósito: no vale la pena una tabla en la base para esto.
 const CHILD_APP_VERSION = {
-  versionCode: 8,
-  versionName: "0.6.2",
+  versionCode: 9,
+  versionName: "0.6.3",
   downloadUrl: "/apks/familyguard-hijo-latest.apk",
-  notes: "El teléfono ahora reintenta reconectar el canal de \"hacer sonar\" de respaldo aunque el sistema haya matado el servicio principal en segundo plano.",
+  notes: "Al sonar, ahora se abre una pantalla explicando que los padres llaman, con botón para dejar de sonar. El padre también puede cortarlo a distancia.",
 };
 
 const PARENT_APP_VERSION = {
-  versionCode: 7,
-  versionName: "0.6.0",
+  versionCode: 8,
+  versionName: "0.6.1",
   downloadUrl: "/apks/familyguard-padre-latest.apk",
-  notes: "Mapa en vivo más ordenado (sin líneas enredadas) y nuevo recorrido animado del día, botón \"Ver recorrido de hoy\".",
+  notes: "\"Hacer sonar\" ahora pide confirmación antes de mandarlo, y se agregó un botón \"Detener\" para cortarlo a distancia.",
 };
 
 // Las dos apps llaman esto al arrancar para saber si hay una versión más

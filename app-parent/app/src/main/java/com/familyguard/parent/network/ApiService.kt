@@ -54,6 +54,9 @@ interface ApiService {
     @POST("commands/{childDeviceId}/ring")
     suspend fun ringDevice(@Path("childDeviceId") childDeviceId: String): Response<Unit>
 
+    @POST("commands/{childDeviceId}/stop-ring")
+    suspend fun stopRingDevice(@Path("childDeviceId") childDeviceId: String): Response<Unit>
+
     @GET("app/parent/latest")
     suspend fun getLatestAppVersion(): Response<AppVersionInfo>
 }

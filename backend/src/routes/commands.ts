@@ -23,3 +23,15 @@ commandsRouter.post("/:childDeviceId/ring", requireParentAuth, async (req, res) 
   sendCommandToChild(childDeviceId, "command:ring", { requestedAt: new Date() });
   res.json({ ok: true });
 });
+
+// Para cuando se tocó "Hacer sonar" sin querer, o el chico no llega a la
+// pantalla a tiempo: el padre lo puede cortar también desde su propia app,
+// no solo el botón que aparece en el teléfono del hijo.
+commandsRouter.post("/:childDeviceId/stop-ring", requireParentAuth, async (req, res) => {
+  const { childDeviceId } = req.params;
+  const child = await db.childDevice.findFirst({ where: { id: childDeviceId, parentId: req.parentId! } });
+  if (!child) return res.status(404).json({ error: "not_found" });
+
+  sendCommandToChild(childDeviceId, "command:stopRing", {});
+  res.json({ ok: true });
+});

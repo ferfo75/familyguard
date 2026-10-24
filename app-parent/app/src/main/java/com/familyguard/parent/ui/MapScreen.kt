@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -109,6 +110,10 @@ fun MapScreen(prefs: Prefs) {
     var isPlaying by remember { mutableStateOf(true) }
     var replayTick by remember { mutableStateOf(0) }
     var ringStatus by remember { mutableStateOf<String?>(null) }
+    // Para no hacer sonar el teléfono por un toque accidental: "Hacer sonar"
+    // guarda acá a quién se le tocaría hacer sonar, y recién se manda el
+    // comando si confirman en el diálogo.
+    var confirmRingFor by remember { mutableStateOf<ChildMapState?>(null) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(0.0, 0.0), 2f)
@@ -268,17 +273,37 @@ fun MapScreen(prefs: Prefs) {
                 playbackChildId = child.childDeviceId
                 replayTick++
             },
-            onRing = {
+            onRing = { confirmRingFor = child; selectedForDirections = null },
+            onStopRing = {
                 scope.launch {
                     val api = ApiClient.create(prefs)
-                    val ok = runCatching { api.ringDevice(child.childDeviceId) }.getOrNull()?.isSuccessful == true
-                    ringStatus = if (ok) "Sonando en el teléfono de ${child.name}…" else "No se pudo: el teléfono está sin conexión ahora mismo."
+                    runCatching { api.stopRingDevice(child.childDeviceId) }
+                    ringStatus = "Avisado: que deje de sonar en el teléfono de ${child.name}."
                 }
             },
             onDismiss = { selectedForDirections = null },
             onGoogleMaps = { NavigationIntents.openGoogleMapsDirections(context, child.position.latitude, child.position.longitude) },
             onWaze = { NavigationIntents.openWazeDirections(context, child.position.latitude, child.position.longitude) },
             onOtherApp = { NavigationIntents.openChooser(context, child.position.latitude, child.position.longitude, child.name) },
+        )
+    }
+
+    confirmRingFor?.let { child ->
+        AlertDialog(
+            onDismissRequest = { confirmRingFor = null },
+            title = { Text("¿Hacer sonar el teléfono?") },
+            text = { Text("Va a sonar fuerte en el teléfono de ${child.name}, aunque lo tenga en silencio.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRingFor = null
+                    scope.launch {
+                        val api = ApiClient.create(prefs)
+                        val ok = runCatching { api.ringDevice(child.childDeviceId) }.getOrNull()?.isSuccessful == true
+                        ringStatus = if (ok) "Sonando en el teléfono de ${child.name}…" else "No se pudo: el teléfono está sin conexión ahora mismo."
+                    }
+                }) { Text("Hacer sonar") }
+            },
+            dismissButton = { TextButton(onClick = { confirmRingFor = null }) { Text("Cancelar") } },
         )
     }
 
@@ -396,6 +421,7 @@ private fun DirectionsSheet(
     speedLabel: String?,
     onPlayRoute: () -> Unit,
     onRing: () -> Unit,
+    onStopRing: () -> Unit,
     onDismiss: () -> Unit,
     onGoogleMaps: () -> Unit,
     onWaze: () -> Unit,
@@ -413,17 +439,23 @@ private fun DirectionsSheet(
             if (details.isNotEmpty()) Text(details, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(16.dp))
 
+            OutlinedButton(onClick = { onPlayRoute(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Route, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("Ver recorrido de hoy")
+            }
+            Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = { onPlayRoute(); onDismiss() }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.Route, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Ver recorrido de hoy")
-                }
-                Spacer(Modifier.width(8.dp))
                 OutlinedButton(onClick = onRing, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Filled.VolumeUp, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("Hacer sonar")
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = { onStopRing(); onDismiss() }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Filled.VolumeOff, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Detener")
                 }
             }
 

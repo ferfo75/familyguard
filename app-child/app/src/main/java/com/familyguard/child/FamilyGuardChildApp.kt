@@ -21,9 +21,17 @@ class FamilyGuardChildApp : Application() {
                 NotificationManager.IMPORTANCE_LOW
             ).apply { description = "Indica que FamilyGuard está compartiendo la ubicación" }
         )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_RING,
+                "Hacer sonar",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply { description = "Aviso cuando un padre hace sonar el teléfono a distancia" }
+        )
     }
 
     companion object {
         const val CHANNEL_TRACKING = "tracking"
+        const val CHANNEL_RING = "ring"
     }
 }

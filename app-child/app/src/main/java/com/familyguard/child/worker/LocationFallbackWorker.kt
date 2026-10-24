@@ -53,7 +53,11 @@ class LocationFallbackWorker(
         runCatching {
             val token = prefs.deviceTokenOrNull()
             if (token != null) {
-                ChildSocketManager.connectAndListenForRing(token) { RingPlayer.start(context) }
+                ChildSocketManager.connectAndListenForRing(
+                    token,
+                    onRing = { RingPlayer.start(context) },
+                    onStopRing = { RingPlayer.stop(context) },
+                )
             }
         }
 
