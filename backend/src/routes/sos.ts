@@ -86,3 +86,14 @@ sosRouter.post("/:id/resolve", requireParentAuth, async (req, res) => {
   await db.sosAlert.update({ where: { id: alert.id }, data: { resolvedAt: new Date() } });
   res.json({ ok: true });
 });
+
+// Para borrar del todo una alerta (por ejemplo, una de prueba), no solo
+// marcarla resuelta.
+sosRouter.delete("/:id", requireParentAuth, async (req, res) => {
+  const alert = await db.sosAlert.findFirst({
+    where: { id: req.params.id, childDevice: { parentId: req.parentId! } },
+  });
+  if (!alert) return res.status(404).json({ error: "not_found" });
+  await db.sosAlert.delete({ where: { id: alert.id } });
+  res.status(204).end();
+});

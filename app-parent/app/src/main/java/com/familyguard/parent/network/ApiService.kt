@@ -45,6 +45,9 @@ interface ApiService {
     @POST("sos/{id}/resolve")
     suspend fun resolveSosAlert(@Path("id") id: String): Response<Unit>
 
+    @DELETE("sos/{id}")
+    suspend fun deleteSosAlert(@Path("id") id: String): Response<Unit>
+
     @POST("push/register")
     suspend fun registerPushToken(@Body body: RegisterPushTokenRequest): Response<Unit>
 

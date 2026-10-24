@@ -3,6 +3,7 @@ package com.familyguard.parent.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Layers
@@ -14,7 +15,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import com.familyguard.parent.data.Prefs
@@ -53,6 +58,9 @@ private val markerColors = listOf(
     Color(0xFF6A1B9A), Color(0xFFC62828), Color(0xFF00838F),
 )
 
+private const val TRAIL_WINDOW_MS = 2 * 60 * 60 * 1000L // 2 horas
+private const val MAX_TRAIL_POINTS = 300 // evita que el trazo crezca sin límite si queda la pantalla abierta mucho rato
+
 /**
  * Mapa en vivo con TODOS los hijos a la vez, cada uno con su nombre visible
  * permanentemente (no solo al tocar el marcador, para verlos de un vistazo).
@@ -63,10 +71,16 @@ fun MapScreen(prefs: Prefs) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var children by remember { mutableStateOf<Map<String, ChildMapState>>(emptyMap()) }
-    var satelliteOn by remember { mutableStateOf(false) }
+    // Satélite por defecto: se ve mucho mejor para ubicar a alguien en el
+    // momento que el mapa de calles genérico.
+    var satelliteOn by remember { mutableStateOf(true) }
     var selectedForDirections by remember { mutableStateOf<ChildMapState?>(null) }
     var didInitialFit by remember { mutableStateOf(false) }
-    // Hijo cuya ruta recorrida se está mostrando ahora (null = ninguna).
+    // Camino cortito (últimas 2h) de CADA hijo, siempre visible sin tocar
+    // nada — es lo que pediste como "el caminito que deja al moverse".
+    var liveTrails by remember { mutableStateOf<Map<String, List<LatLng>>>(emptyMap()) }
+    // Hijo cuya ruta COMPLETA del día se está mostrando ahora (null = ninguna),
+    // para cuando se quiere ver más que las últimas 2h.
     var routeChildId by remember { mutableStateOf<String?>(null) }
     var routePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     var ringStatus by remember { mutableStateOf<String?>(null) }
@@ -77,7 +91,8 @@ fun MapScreen(prefs: Prefs) {
 
     LaunchedEffect(Unit) {
         val api = ApiClient.create(prefs)
-        runCatching { api.getLatestLocations() }.getOrNull()?.body()?.let { response ->
+        val latest = runCatching { api.getLatestLocations() }.getOrNull()?.body()
+        latest?.let { response ->
             children = response.children
                 .filter { it.location != null }
                 .associate { c ->
@@ -86,6 +101,16 @@ fun MapScreen(prefs: Prefs) {
                         c.location.speedMs, c.batteryLevel, c.lastSeenAt,
                     )
                 }
+            // Trae el caminito cortito de cada hijo de entrada, para que ya
+            // se vea algo sin esperar a que se mueva de nuevo.
+            latest.children.filter { it.location != null }.forEach { c ->
+                val from = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+                    .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                    .format(java.util.Date(System.currentTimeMillis() - TRAIL_WINDOW_MS))
+                val pts = runCatching { api.getHistory(c.childDeviceId, from) }.getOrNull()?.body()?.points
+                    ?.map { LatLng(it.lat, it.lng) }
+                if (pts != null) liveTrails = liveTrails + (c.childDeviceId to pts)
+            }
         }
 
         SocketManager.onLocationUpdate { json ->
@@ -96,9 +121,13 @@ fun MapScreen(prefs: Prefs) {
             val battery = if (json.has("batteryLevel") && !json.isNull("batteryLevel")) json.optInt("batteryLevel") else null
             val existing = children[id]
             children = children + (id to ChildMapState(id, existing?.name ?: id, LatLng(lat, lng), speed, battery, existing?.lastSeenAt))
-            // Si estamos mostrando la ruta de este hijo, vamos sumando el
-            // punto nuevo para que el trazo se dibuje solo, en vivo.
-            if (routeChildId == id) routePoints = routePoints + LatLng(lat, lng)
+            // El caminito corto de ESTE hijo se arma solo, sin que haga falta
+            // tocar nada — es la parte que pediste ver siempre.
+            val newPoint = LatLng(lat, lng)
+            liveTrails = liveTrails + (id to ((liveTrails[id] ?: emptyList()) + newPoint).takeLast(MAX_TRAIL_POINTS))
+            // Si además estamos mostrando la ruta completa del día de este
+            // hijo, vamos sumando ahí también.
+            if (routeChildId == id) routePoints = routePoints + newPoint
         }
     }
 
@@ -133,6 +162,22 @@ fun MapScreen(prefs: Prefs) {
             cameraPositionState = cameraPositionState,
             properties = MapProperties(mapType = if (satelliteOn) MapType.HYBRID else MapType.NORMAL),
         ) {
+            // Caminito corto (2h) de cada hijo, siempre dibujado, fino y
+            // semi-transparente para no tapar el mapa.
+            children.values.forEachIndexed { index, child ->
+                val trail = liveTrails[child.childDeviceId]
+                if (trail != null && trail.size > 1) {
+                    val color = markerColors[index % markerColors.size]
+                    Polyline(points = trail, color = color.copy(alpha = 0.6f), width = 6f)
+                }
+            }
+            // Ruta completa del día, más gruesa, solo para el hijo elegido con "Ver ruta".
+            if (routePoints.size > 1) {
+                val routeColor = children[routeChildId]?.let { child ->
+                    children.values.toList().indexOf(child).let { markerColors[it % markerColors.size] }
+                } ?: Color.Blue
+                Polyline(points = routePoints, color = routeColor, width = 10f)
+            }
             children.values.forEachIndexed { index, child ->
                 val color = markerColors[index % markerColors.size]
                 MarkerComposable(
@@ -144,12 +189,6 @@ fun MapScreen(prefs: Prefs) {
                 ) {
                     ChildMarkerBubble(name = child.name, color = color)
                 }
-            }
-            if (routePoints.size > 1) {
-                val routeColor = children[routeChildId]?.let { child ->
-                    children.values.toList().indexOf(child).let { markerColors[it % markerColors.size] }
-                } ?: Color.Blue
-                Polyline(points = routePoints, color = routeColor, width = 8f)
             }
         }
 
@@ -211,16 +250,40 @@ private fun ChildMarkerBubble(name: String, color: Color) {
             color = Color.White,
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier
-                .background(color, RoundedCornerShape(8.dp))
-                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .shadow(3.dp, RoundedCornerShape(10.dp))
+                .background(color, RoundedCornerShape(10.dp))
+                .padding(horizontal = 10.dp, vertical = 4.dp)
         )
+        Spacer(Modifier.height(4.dp))
+        // Avatar circular con la inicial, en vez de un punto genérico —
+        // diseño propio, sin usar personajes de ninguna otra app.
         Box(
             Modifier
-                .padding(top = 2.dp)
-                .size(18.dp)
-                .clip(RoundedCornerShape(50))
-                .background(color)
-        )
+                .shadow(4.dp, CircleShape)
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .padding(2.dp)
+                .clip(CircleShape)
+                .background(color),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                name.take(1).uppercase(),
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        // Puntero chico abajo del avatar, para marcar el punto exacto en el mapa.
+        androidx.compose.foundation.Canvas(Modifier.size(width = 10.dp, height = 6.dp)) {
+            val path = Path().apply {
+                moveTo(0f, 0f)
+                lineTo(size.width, 0f)
+                lineTo(size.width / 2f, size.height)
+                close()
+            }
+            drawPath(path, color = color, style = Fill)
+        }
     }
 }
 

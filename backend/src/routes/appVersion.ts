@@ -12,10 +12,10 @@ const CHILD_APP_VERSION = {
 };
 
 const PARENT_APP_VERSION = {
-  versionCode: 4,
-  versionName: "0.4.0",
+  versionCode: 5,
+  versionName: "0.5.0",
   downloadUrl: "/apks/familyguard-padre-latest.apk",
-  notes: "Auto-actualización con un toque, ruta, velocidad, hacer sonar, escuchar nota de voz del SOS, diseño nuevo.",
+  notes: "Arreglo de botones tapados en SOS, satélite por defecto, camino en vivo siempre visible, marcadores nuevos.",
 };
 
 // Las dos apps llaman esto al arrancar para saber si hay una versión más
