@@ -5,7 +5,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.familyguard.child.data.Prefs
 import com.familyguard.child.network.ApiClient
+import com.familyguard.child.network.ChildSocketManager
 import com.familyguard.child.network.LocationPingRequest
+import com.familyguard.child.ring.RingPlayer
 import com.familyguard.child.service.LocationTrackingService
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -41,6 +43,19 @@ class LocationFallbackWorker(
         // Worker en segundo plano en algunos estados (no es crítico si falla
         // acá: igual mandamos nuestro propio ping de respaldo más abajo).
         runCatching { LocationTrackingService.start(context) }
+
+        // Si el servicio en primer plano no llegó a levantar (Android 12+
+        // puede rechazarlo desde segundo plano en algunos estados), al
+        // menos probamos reconectar el canal de "hacer sonar" directamente
+        // acá: no necesita permisos de foreground service, solo red, y así
+        // el padre puede volver a hacer sonar el teléfono aunque el
+        // seguimiento en vivo siga caído hasta el próximo intento.
+        runCatching {
+            val token = prefs.deviceTokenOrNull()
+            if (token != null) {
+                ChildSocketManager.connectAndListenForRing(token) { RingPlayer.start(context) }
+            }
+        }
 
         val fusedClient = LocationServices.getFusedLocationProviderClient(context)
         val location = runCatching {

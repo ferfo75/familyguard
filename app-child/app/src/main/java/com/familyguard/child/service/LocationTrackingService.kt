@@ -62,8 +62,7 @@ class LocationTrackingService : Service() {
     private fun connectCommandSocket() {
         scope.launch {
             val token = prefs.deviceTokenOrNull() ?: return@launch
-            ChildSocketManager.connect(token)
-            ChildSocketManager.onRingCommand {
+            ChildSocketManager.connectAndListenForRing(token) {
                 RingPlayer.start(applicationContext)
             }
         }
