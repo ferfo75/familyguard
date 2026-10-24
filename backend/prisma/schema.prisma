@@ -61,6 +61,10 @@ model LocationPing {
   lng           Float
   accuracyM     Float?
   speedMs       Float? // velocidad instantánea en m/s que reporta el GPS; null si el dispositivo no la informó
+  // "walking" | "running" | "bicycle" | "vehicle" | "still"; null si no hubo
+  // una detección reciente con confianza suficiente (API de Google Play
+  // Services, no una medición exacta).
+  activityType  String?
   recordedAt    DateTime    @default(now())
 
   @@index([childDeviceId, recordedAt])

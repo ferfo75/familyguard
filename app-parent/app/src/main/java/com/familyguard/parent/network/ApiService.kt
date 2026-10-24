@@ -24,6 +24,9 @@ interface ApiService {
     @GET("location/{childDeviceId}/history")
     suspend fun getHistory(@Path("childDeviceId") childDeviceId: String, @Query("from") from: String? = null): Response<HistoryResponse>
 
+    @GET("location/{childDeviceId}/frequent-places")
+    suspend fun getFrequentPlaces(@Path("childDeviceId") childDeviceId: String): Response<FrequentPlacesResponse>
+
     @GET("geofences")
     suspend fun getGeofences(): Response<GeofencesResponse>
 

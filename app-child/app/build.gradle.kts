@@ -13,8 +13,8 @@ android {
         applicationId = "com.familyguard.child"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.6.5"
+        versionCode = 12
+        versionName = "0.7.0"
         buildConfigField(
             "String",
             "API_BASE_URL",

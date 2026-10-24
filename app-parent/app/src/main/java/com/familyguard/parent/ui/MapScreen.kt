@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.VolumeOff
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import com.familyguard.parent.data.Prefs
 import com.familyguard.parent.network.ApiClient
+import com.familyguard.parent.network.FrequentPlace
 import com.familyguard.parent.network.HistoryPoint
 import com.familyguard.parent.network.SocketManager
 import com.familyguard.parent.util.NavigationIntents
@@ -52,11 +54,23 @@ private data class ChildMapState(
     val name: String,
     val position: LatLng,
     val speedMs: Float?,
+    val activityType: String?,
     val batteryLevel: Int?,
     val lastSeenAt: String?,
 )
 
 private fun Float?.toKmh(): String? = this?.let { "%.0f km/h".format(it * 3.6f) }
+
+// Lo que detecta Google Play Services (confianza, no una medición exacta),
+// por eso se muestra como "parece estar..." y no como un hecho.
+private fun String?.toActivityLabel(): String? = when (this) {
+    "walking" -> "🚶 Caminando"
+    "running" -> "🏃 Corriendo"
+    "bicycle" -> "🚲 En bici"
+    "vehicle" -> "🚗 En auto/micro"
+    "still" -> "🧍 Quieto"
+    else -> null
+}
 
 // Una paleta fija y corta: alcanza para distinguir varios hijos sin repetir
 // colores demasiado seguido, y es más clara que generar colores al azar.
@@ -114,6 +128,11 @@ fun MapScreen(prefs: Prefs) {
     // guarda acá a quién se le tocaría hacer sonar, y recién se manda el
     // comando si confirman en el diálogo.
     var confirmRingFor by remember { mutableStateOf<ChildMapState?>(null) }
+    // Lugares donde el hijo pasó tiempo seguido en las últimas 2 semanas,
+    // según su propio historial (no es una predicción, es un resumen).
+    var frequentPlacesFor by remember { mutableStateOf<ChildMapState?>(null) }
+    var frequentPlaces by remember { mutableStateOf<List<FrequentPlace>>(emptyList()) }
+    var loadingFrequentPlaces by remember { mutableStateOf(false) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(0.0, 0.0), 2f)
@@ -128,7 +147,7 @@ fun MapScreen(prefs: Prefs) {
                 .associate { c ->
                     c.childDeviceId to ChildMapState(
                         c.childDeviceId, c.childName, LatLng(c.location!!.lat, c.location.lng),
-                        c.location.speedMs, c.batteryLevel, c.lastSeenAt,
+                        c.location.speedMs, c.location.activityType, c.batteryLevel, c.lastSeenAt,
                     )
                 }
         }
@@ -138,9 +157,10 @@ fun MapScreen(prefs: Prefs) {
             val lat = json.optDouble("lat")
             val lng = json.optDouble("lng")
             val speed = if (json.has("speedMs") && !json.isNull("speedMs")) json.optDouble("speedMs").toFloat() else null
+            val activityType = if (json.has("activityType") && !json.isNull("activityType")) json.optString("activityType") else null
             val battery = if (json.has("batteryLevel") && !json.isNull("batteryLevel")) json.optInt("batteryLevel") else null
             val existing = children[id]
-            children = children + (id to ChildMapState(id, existing?.name ?: id, LatLng(lat, lng), speed, battery, existing?.lastSeenAt))
+            children = children + (id to ChildMapState(id, existing?.name ?: id, LatLng(lat, lng), speed, activityType, battery, existing?.lastSeenAt))
         }
     }
 
@@ -164,6 +184,16 @@ fun MapScreen(prefs: Prefs) {
             }
         }
         isPlaying = false
+    }
+
+    // Trae los lugares frecuentes cuando el padre elige verlos para un hijo.
+    LaunchedEffect(frequentPlacesFor) {
+        val child = frequentPlacesFor
+        if (child == null) { frequentPlaces = emptyList(); return@LaunchedEffect }
+        loadingFrequentPlaces = true
+        val api = ApiClient.create(prefs)
+        frequentPlaces = runCatching { api.getFrequentPlaces(child.childDeviceId) }.getOrNull()?.body()?.places ?: emptyList()
+        loadingFrequentPlaces = false
     }
 
     // Encuadra a todos los hijos la primera vez que tenemos sus posiciones;
@@ -269,10 +299,12 @@ fun MapScreen(prefs: Prefs) {
             lastSeenAt = child.lastSeenAt,
             batteryLevel = child.batteryLevel,
             speedLabel = child.speedMs.toKmh(),
+            activityLabel = child.activityType.toActivityLabel(),
             onPlayRoute = {
                 playbackChildId = child.childDeviceId
                 replayTick++
             },
+            onFrequentPlaces = { frequentPlacesFor = child; selectedForDirections = null },
             onRing = { confirmRingFor = child; selectedForDirections = null },
             onStopRing = {
                 scope.launch {
@@ -304,6 +336,16 @@ fun MapScreen(prefs: Prefs) {
                 }) { Text("Hacer sonar") }
             },
             dismissButton = { TextButton(onClick = { confirmRingFor = null }) { Text("Cancelar") } },
+        )
+    }
+
+    frequentPlacesFor?.let { child ->
+        FrequentPlacesSheet(
+            childName = child.name,
+            places = frequentPlaces,
+            loading = loadingFrequentPlaces,
+            onOpenInMaps = { place -> NavigationIntents.openGoogleMapsDirections(context, place.lat, place.lng) },
+            onDismiss = { frequentPlacesFor = null },
         )
     }
 
@@ -419,7 +461,9 @@ private fun DirectionsSheet(
     lastSeenAt: String?,
     batteryLevel: Int?,
     speedLabel: String?,
+    activityLabel: String?,
     onPlayRoute: () -> Unit,
+    onFrequentPlaces: () -> Unit,
     onRing: () -> Unit,
     onStopRing: () -> Unit,
     onDismiss: () -> Unit,
@@ -434,6 +478,7 @@ private fun DirectionsSheet(
             val details = buildString {
                 lastSeenAt?.let { append("Última actualización: $it") }
                 batteryLevel?.let { if (isNotEmpty()) append(" · "); append("🔋$it%") }
+                activityLabel?.let { if (isNotEmpty()) append(" · "); append(it) }
                 speedLabel?.let { if (isNotEmpty()) append(" · "); append("🚗$it") }
             }
             if (details.isNotEmpty()) Text(details, style = MaterialTheme.typography.bodySmall)
@@ -458,6 +503,12 @@ private fun DirectionsSheet(
                     Text("Detener")
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { onFrequentPlaces(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Place, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("Lugares frecuentes")
+            }
 
             Spacer(Modifier.height(16.dp))
             Text("Ir hasta ahí con:", style = MaterialTheme.typography.titleSmall)
@@ -476,6 +527,59 @@ private fun DirectionsSheet(
                 Text("Otra app")
             }
             Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/** Resumen de dónde pasó tiempo seguido un hijo/a en las últimas 2 semanas,
+ * armado de verdad con su historial de ubicación — no es una predicción. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FrequentPlacesSheet(
+    childName: String,
+    places: List<FrequentPlace>,
+    loading: Boolean,
+    onOpenInMaps: (FrequentPlace) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(20.dp).padding(bottom = 24.dp)) {
+            Text("Lugares frecuentes de $childName", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Basado en su historial real de los últimos 14 días, no es una predicción.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(16.dp))
+            when {
+                loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                places.isEmpty() -> Text("Todavía no hay suficiente historial para detectar lugares frecuentes.")
+                else -> places.forEach { place ->
+                    Card(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onOpenInMaps(place) },
+                    ) {
+                        Row(
+                            Modifier.padding(16.dp).fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Filled.Place, contentDescription = null)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Estuvo acá ${place.visitDays} días distintos",
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                Text(
+                                    "Normalmente entre las %02d:00 y las %02d:00".format(place.typicalFromHour, place.typicalToHour),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

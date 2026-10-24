@@ -262,6 +262,9 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions += Manifest.permission.POST_NOTIFICATIONS
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            permissions += Manifest.permission.ACTIVITY_RECOGNITION
+        }
         return permissions.toTypedArray()
     }
 

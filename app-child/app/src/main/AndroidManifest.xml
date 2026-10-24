@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Para detectar si el hijo está caminando, en auto, en bici, etc. y
+         mostrárselo al padre junto con la ubicación. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <!-- Sin esto, en Android 14+ la notificación de "hacer sonar" no abre
          sola la pantalla con el aviso: queda solo como una notificación
          más que hay que tocar a mano. -->
@@ -72,6 +75,10 @@
 
         <receiver
             android:name=".ring.RingStopReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".movement.MovementReceiver"
             android:exported="false" />
 
         <receiver

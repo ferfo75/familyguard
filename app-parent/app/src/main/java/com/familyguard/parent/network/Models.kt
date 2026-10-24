@@ -8,7 +8,13 @@ data class AuthResponse(val token: String, val parent: ParentInfo)
 data class CreatePairingRequest(val childName: String)
 data class CreatePairingResponse(val code: String, val expiresAt: String)
 
-data class LatestLocation(val lat: Double, val lng: Double, val speedMs: Float?, val recordedAt: String)
+data class LatestLocation(
+    val lat: Double,
+    val lng: Double,
+    val speedMs: Float?,
+    val activityType: String?,
+    val recordedAt: String,
+)
 data class ChildLatest(
     val childDeviceId: String,
     val childName: String,
@@ -20,6 +26,16 @@ data class LatestLocationsResponse(val children: List<ChildLatest>)
 
 data class HistoryPoint(val lat: Double, val lng: Double, val speedMs: Float?, val recordedAt: String)
 data class HistoryResponse(val points: List<HistoryPoint>)
+
+data class FrequentPlace(
+    val lat: Double,
+    val lng: Double,
+    val visitDays: Int,
+    val totalPings: Int,
+    val typicalFromHour: Int,
+    val typicalToHour: Int,
+)
+data class FrequentPlacesResponse(val places: List<FrequentPlace>, val windowDays: Int)
 
 data class Geofence(
     val id: String,

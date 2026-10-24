@@ -9,6 +9,9 @@ data class LocationPingRequest(
     val accuracyM: Float?,
     val speedMs: Float?,
     val batteryLevel: Int?,
+    // "walking" | "running" | "bicycle" | "vehicle" | "still", o null si no
+    // hay una detección reciente con confianza suficiente.
+    val activityType: String? = null,
 )
 
 data class SosRequest(

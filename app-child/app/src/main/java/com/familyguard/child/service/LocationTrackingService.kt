@@ -14,7 +14,11 @@ import com.familyguard.child.data.Prefs
 import com.familyguard.child.network.ApiClient
 import com.familyguard.child.network.ChildSocketManager
 import com.familyguard.child.network.LocationPingRequest
+import com.familyguard.child.movement.MovementReceiver
+import com.familyguard.child.movement.MovementState
 import com.familyguard.child.ring.RingPlayer
+import com.google.android.gms.location.ActivityRecognition
+import com.google.android.gms.location.ActivityRecognitionClient
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Granularity
 import com.google.android.gms.location.LocationCallback
@@ -36,6 +40,7 @@ import kotlinx.coroutines.launch
 class LocationTrackingService : Service() {
 
     private lateinit var fusedClient: FusedLocationProviderClient
+    private lateinit var activityClient: ActivityRecognitionClient
     private lateinit var prefs: Prefs
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -53,7 +58,23 @@ class LocationTrackingService : Service() {
         super.onCreate()
         prefs = Prefs(applicationContext)
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
+        activityClient = ActivityRecognition.getClient(this)
         connectCommandSocket()
+        startActivityUpdates()
+    }
+
+    // Detecta si el chico está caminando, en auto, en bici, etc. para
+    // mostrárselo al padre junto con la ubicación. Si no se otorgó el
+    // permiso (es opcional, no bloquea el emparejamiento), simplemente no
+    // se manda ese dato — el resto de la app sigue funcionando igual.
+    private fun startActivityUpdates() {
+        val pendingIntent = PendingIntent.getBroadcast(
+            this, 0, Intent(this, MovementReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
+        runCatching {
+            activityClient.requestActivityUpdates(PING_INTERVAL_MS, pendingIntent)
+        }
     }
 
     // Deja conectado el canal de comandos (por ahora, "hacer sonar") durante
@@ -109,7 +130,9 @@ class LocationTrackingService : Service() {
     private suspend fun sendPing(lat: Double, lng: Double, accuracy: Float?, speedMs: Float?) {
         val api = ApiClient.create(prefs)
         runCatching {
-            api.sendLocationPing(LocationPingRequest(lat, lng, accuracy, speedMs, readBatteryLevel()))
+            api.sendLocationPing(
+                LocationPingRequest(lat, lng, accuracy, speedMs, readBatteryLevel(), MovementState.current)
+            )
         }
     }
 
@@ -139,6 +162,11 @@ class LocationTrackingService : Service() {
 
     override fun onDestroy() {
         fusedClient.removeLocationUpdates(locationCallback)
+        val pendingIntent = PendingIntent.getBroadcast(
+            this, 0, Intent(this, MovementReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
+        runCatching { activityClient.removeActivityUpdates(pendingIntent) }
         super.onDestroy()
     }
 

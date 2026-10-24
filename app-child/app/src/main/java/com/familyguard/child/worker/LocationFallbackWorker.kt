@@ -76,7 +76,10 @@ class LocationFallbackWorker(
         val api = ApiClient.create(prefs)
         return runCatching {
             api.sendLocationPing(
-                LocationPingRequest(location.latitude, location.longitude, location.accuracy, speed, batteryLevel = null)
+                LocationPingRequest(
+                    location.latitude, location.longitude, location.accuracy, speed,
+                    batteryLevel = null, activityType = com.familyguard.child.movement.MovementState.current,
+                )
             )
         }.fold(onSuccess = { Result.success() }, onFailure = { Result.retry() })
     }
