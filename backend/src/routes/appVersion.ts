@@ -12,10 +12,10 @@ const CHILD_APP_VERSION = {
 };
 
 const PARENT_APP_VERSION = {
-  versionCode: 6,
-  versionName: "0.5.1",
+  versionCode: 7,
+  versionName: "0.6.0",
   downloadUrl: "/apks/familyguard-padre-latest.apk",
-  notes: "Corrección: la app esperaba muy poco tiempo al servidor y a veces no avisaba que había una actualización.",
+  notes: "Mapa en vivo más ordenado (sin líneas enredadas) y nuevo recorrido animado del día, botón \"Ver recorrido de hoy\".",
 };
 
 // Las dos apps llaman esto al arrancar para saber si hay una versión más

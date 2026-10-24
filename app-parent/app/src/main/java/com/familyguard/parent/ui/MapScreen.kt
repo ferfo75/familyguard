@@ -6,8 +6,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
@@ -24,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import com.familyguard.parent.data.Prefs
 import com.familyguard.parent.network.ApiClient
+import com.familyguard.parent.network.HistoryPoint
 import com.familyguard.parent.network.SocketManager
 import com.familyguard.parent.util.NavigationIntents
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -37,6 +42,7 @@ import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Estado en memoria de un hijo/a para dibujarlo en el mapa. */
@@ -58,8 +64,26 @@ private val markerColors = listOf(
     Color(0xFF6A1B9A), Color(0xFFC62828), Color(0xFF00838F),
 )
 
-private const val TRAIL_WINDOW_MS = 2 * 60 * 60 * 1000L // 2 horas
-private const val MAX_TRAIL_POINTS = 300 // evita que el trazo crezca sin límite si queda la pantalla abierta mucho rato
+// Si el recorrido del día tiene muchísimos puntos (por GPS ruidoso o un día
+// muy largo), lo recortamos a esta cantidad para que la animación no tarde
+// una eternidad ni se sature el mapa.
+private const val MAX_PLAYBACK_POINTS = 400
+private const val PLAYBACK_STEP_MS = 120L
+
+/** Reduce una lista de puntos tomando uno cada N, sin perder el primero ni el último. */
+private fun <T> List<T>.downsample(maxSize: Int): List<T> {
+    if (size <= maxSize) return this
+    val step = (size.toFloat() / maxSize).let { if (it < 1f) 1f else it }
+    val result = (0 until maxSize).map { i -> this[(i * step).toInt().coerceAtMost(size - 1)] }
+    return if (result.last() == last()) result else result + last()
+}
+
+private fun formatHora(recordedAt: String): String = runCatching {
+    val parsed = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+        .parse(recordedAt.substringBefore("."))
+    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(parsed!!)
+}.getOrDefault("--:--")
 
 /**
  * Mapa en vivo con TODOS los hijos a la vez, cada uno con su nombre visible
@@ -76,13 +100,14 @@ fun MapScreen(prefs: Prefs) {
     var satelliteOn by remember { mutableStateOf(true) }
     var selectedForDirections by remember { mutableStateOf<ChildMapState?>(null) }
     var didInitialFit by remember { mutableStateOf(false) }
-    // Camino cortito (últimas 2h) de CADA hijo, siempre visible sin tocar
-    // nada — es lo que pediste como "el caminito que deja al moverse".
-    var liveTrails by remember { mutableStateOf<Map<String, List<LatLng>>>(emptyMap()) }
-    // Hijo cuya ruta COMPLETA del día se está mostrando ahora (null = ninguna),
-    // para cuando se quiere ver más que las últimas 2h.
-    var routeChildId by remember { mutableStateOf<String?>(null) }
-    var routePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
+    // Reproducción animada del recorrido del día de UN hijo a la vez: en vez
+    // de mostrar todas las líneas superpuestas (quedaba un enredo ilegible),
+    // se ve el punto moviéndose paso a paso, como si lo recorriera de nuevo.
+    var playbackChildId by remember { mutableStateOf<String?>(null) }
+    var playbackHistory by remember { mutableStateOf<List<HistoryPoint>>(emptyList()) }
+    var playbackIndex by remember { mutableStateOf(0) }
+    var isPlaying by remember { mutableStateOf(true) }
+    var replayTick by remember { mutableStateOf(0) }
     var ringStatus by remember { mutableStateOf<String?>(null) }
 
     val cameraPositionState = rememberCameraPositionState {
@@ -101,16 +126,6 @@ fun MapScreen(prefs: Prefs) {
                         c.location.speedMs, c.batteryLevel, c.lastSeenAt,
                     )
                 }
-            // Trae el caminito cortito de cada hijo de entrada, para que ya
-            // se vea algo sin esperar a que se mueva de nuevo.
-            latest.children.filter { it.location != null }.forEach { c ->
-                val from = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
-                    .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                    .format(java.util.Date(System.currentTimeMillis() - TRAIL_WINDOW_MS))
-                val pts = runCatching { api.getHistory(c.childDeviceId, from) }.getOrNull()?.body()?.points
-                    ?.map { LatLng(it.lat, it.lng) }
-                if (pts != null) liveTrails = liveTrails + (c.childDeviceId to pts)
-            }
         }
 
         SocketManager.onLocationUpdate { json ->
@@ -121,23 +136,29 @@ fun MapScreen(prefs: Prefs) {
             val battery = if (json.has("batteryLevel") && !json.isNull("batteryLevel")) json.optInt("batteryLevel") else null
             val existing = children[id]
             children = children + (id to ChildMapState(id, existing?.name ?: id, LatLng(lat, lng), speed, battery, existing?.lastSeenAt))
-            // El caminito corto de ESTE hijo se arma solo, sin que haga falta
-            // tocar nada — es la parte que pediste ver siempre.
-            val newPoint = LatLng(lat, lng)
-            liveTrails = liveTrails + (id to ((liveTrails[id] ?: emptyList()) + newPoint).takeLast(MAX_TRAIL_POINTS))
-            // Si además estamos mostrando la ruta completa del día de este
-            // hijo, vamos sumando ahí también.
-            if (routeChildId == id) routePoints = routePoints + newPoint
         }
     }
 
-    // Trae el recorrido de las últimas 24h cuando el padre elige "Ver ruta".
-    LaunchedEffect(routeChildId) {
-        val id = routeChildId
-        if (id == null) { routePoints = emptyList(); return@LaunchedEffect }
+    // Trae el recorrido del día cuando el padre elige "Ver recorrido de hoy"
+    // y lo va reproduciendo paso a paso, como si volviera a caminarlo.
+    LaunchedEffect(playbackChildId, replayTick) {
+        val id = playbackChildId
+        if (id == null) { playbackHistory = emptyList(); return@LaunchedEffect }
+        playbackIndex = 0
         val api = ApiClient.create(prefs)
-        routePoints = runCatching { api.getHistory(id) }.getOrNull()?.body()?.points
-            ?.map { LatLng(it.lat, it.lng) } ?: emptyList()
+        val points = runCatching { api.getHistory(id) }.getOrNull()?.body()?.points ?: emptyList()
+        playbackHistory = points.downsample(MAX_PLAYBACK_POINTS)
+        if (playbackHistory.size < 2) { isPlaying = false; return@LaunchedEffect }
+        isPlaying = true
+        while (playbackIndex < playbackHistory.size - 1) {
+            if (isPlaying) {
+                delay(PLAYBACK_STEP_MS)
+                playbackIndex++
+            } else {
+                delay(100)
+            }
+        }
+        isPlaying = false
     }
 
     // Encuadra a todos los hijos la primera vez que tenemos sus posiciones;
@@ -162,23 +183,10 @@ fun MapScreen(prefs: Prefs) {
             cameraPositionState = cameraPositionState,
             properties = MapProperties(mapType = if (satelliteOn) MapType.HYBRID else MapType.NORMAL),
         ) {
-            // Caminito corto (2h) de cada hijo, siempre dibujado, fino y
-            // semi-transparente para no tapar el mapa.
+            // Mapa limpio por defecto: solo los marcadores con la posición
+            // actual de cada hijo, sin líneas permanentes que se enreden.
             children.values.forEachIndexed { index, child ->
-                val trail = liveTrails[child.childDeviceId]
-                if (trail != null && trail.size > 1) {
-                    val color = markerColors[index % markerColors.size]
-                    Polyline(points = trail, color = color.copy(alpha = 0.6f), width = 6f)
-                }
-            }
-            // Ruta completa del día, más gruesa, solo para el hijo elegido con "Ver ruta".
-            if (routePoints.size > 1) {
-                val routeColor = children[routeChildId]?.let { child ->
-                    children.values.toList().indexOf(child).let { markerColors[it % markerColors.size] }
-                } ?: Color.Blue
-                Polyline(points = routePoints, color = routeColor, width = 10f)
-            }
-            children.values.forEachIndexed { index, child ->
+                if (child.childDeviceId == playbackChildId) return@forEachIndexed
                 val color = markerColors[index % markerColors.size]
                 MarkerComposable(
                     state = com.google.maps.android.compose.rememberMarkerState(
@@ -188,6 +196,28 @@ fun MapScreen(prefs: Prefs) {
                     onClick = { selectedForDirections = child; true },
                 ) {
                     ChildMarkerBubble(name = child.name, color = color)
+                }
+            }
+
+            // Reproducción del recorrido del día: el camino se va dibujando
+            // de a poco y el marcador se mueve con él, en vez de mostrar
+            // todas las líneas juntas de una.
+            val playbackChild = children[playbackChildId]
+            if (playbackChild != null && playbackHistory.isNotEmpty()) {
+                val colorIndex = children.values.toList().indexOf(playbackChild)
+                val color = markerColors[colorIndex.coerceAtLeast(0) % markerColors.size]
+                val shownPoints = playbackHistory.take(playbackIndex + 1).map { LatLng(it.lat, it.lng) }
+                if (shownPoints.size > 1) {
+                    Polyline(points = shownPoints, color = color, width = 9f)
+                }
+                val current = playbackHistory[playbackIndex]
+                MarkerComposable(
+                    state = com.google.maps.android.compose.rememberMarkerState(
+                        key = "${playbackChild.childDeviceId}-playback",
+                        position = LatLng(current.lat, current.lng),
+                    ),
+                ) {
+                    ChildMarkerBubble(name = playbackChild.name, color = color)
                 }
             }
         }
@@ -204,6 +234,28 @@ fun MapScreen(prefs: Prefs) {
                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
             )
         }
+
+        val playbackChild = children[playbackChildId]
+        if (playbackChild != null) {
+            PlaybackBar(
+                childName = playbackChild.name,
+                currentIndex = playbackIndex,
+                total = playbackHistory.size,
+                currentTime = playbackHistory.getOrNull(playbackIndex)?.recordedAt?.let { formatHora(it) },
+                isPlaying = isPlaying,
+                isFinished = playbackHistory.isNotEmpty() && playbackIndex >= playbackHistory.size - 1,
+                onTogglePlay = {
+                    if (playbackHistory.isNotEmpty() && playbackIndex >= playbackHistory.size - 1) {
+                        replayTick++
+                    } else {
+                        isPlaying = !isPlaying
+                    }
+                },
+                onScrub = { index -> playbackIndex = index; isPlaying = false },
+                onClose = { playbackChildId = null },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
     }
 
     selectedForDirections?.let { child ->
@@ -212,9 +264,9 @@ fun MapScreen(prefs: Prefs) {
             lastSeenAt = child.lastSeenAt,
             batteryLevel = child.batteryLevel,
             speedLabel = child.speedMs.toKmh(),
-            showingRoute = routeChildId == child.childDeviceId,
-            onToggleRoute = {
-                routeChildId = if (routeChildId == child.childDeviceId) null else child.childDeviceId
+            onPlayRoute = {
+                playbackChildId = child.childDeviceId
+                replayTick++
             },
             onRing = {
                 scope.launch {
@@ -287,6 +339,54 @@ private fun ChildMarkerBubble(name: String, color: Color) {
     }
 }
 
+/** Controles de la reproducción animada del recorrido del día: play/pausa, línea de tiempo y hora. */
+@Composable
+private fun PlaybackBar(
+    childName: String,
+    currentIndex: Int,
+    total: Int,
+    currentTime: String?,
+    isPlaying: Boolean,
+    isFinished: Boolean,
+    onTogglePlay: () -> Unit,
+    onScrub: (Int) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth().padding(12.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Route, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "Recorrido de hoy · $childName" + (currentTime?.let { " · $it" } ?: ""),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Filled.Close, contentDescription = "Cerrar")
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onTogglePlay) {
+                    Icon(
+                        if (isFinished) Icons.Filled.Replay
+                        else if (isPlaying) Icons.Filled.Pause
+                        else Icons.Filled.PlayArrow,
+                        contentDescription = if (isPlaying) "Pausar" else "Reproducir",
+                    )
+                }
+                Slider(
+                    value = currentIndex.toFloat(),
+                    onValueChange = { onScrub(it.toInt()) },
+                    valueRange = 0f..(total - 1).coerceAtLeast(1).toFloat(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DirectionsSheet(
@@ -294,8 +394,7 @@ private fun DirectionsSheet(
     lastSeenAt: String?,
     batteryLevel: Int?,
     speedLabel: String?,
-    showingRoute: Boolean,
-    onToggleRoute: () -> Unit,
+    onPlayRoute: () -> Unit,
     onRing: () -> Unit,
     onDismiss: () -> Unit,
     onGoogleMaps: () -> Unit,
@@ -315,10 +414,10 @@ private fun DirectionsSheet(
             Spacer(Modifier.height(16.dp))
 
             Row(Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = onToggleRoute, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = { onPlayRoute(); onDismiss() }, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Filled.Route, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (showingRoute) "Ocultar ruta" else "Ver ruta")
+                    Text("Ver recorrido de hoy")
                 }
                 Spacer(Modifier.width(8.dp))
                 OutlinedButton(onClick = onRing, modifier = Modifier.weight(1f)) {
