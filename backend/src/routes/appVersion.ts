@@ -12,10 +12,10 @@ const CHILD_APP_VERSION = {
 };
 
 const PARENT_APP_VERSION = {
-  versionCode: 8,
-  versionName: "0.6.1",
+  versionCode: 9,
+  versionName: "0.6.2",
   downloadUrl: "/apks/familyguard-padre-latest.apk",
-  notes: "\"Hacer sonar\" ahora pide confirmación antes de mandarlo, y se agregó un botón \"Detener\" para cortarlo a distancia.",
+  notes: "Nuevo: botón para eliminar un hijo/a (ej. un perfil de prueba), con confirmación.",
 };
 
 // Las dos apps llaman esto al arrancar para saber si hay una versión más

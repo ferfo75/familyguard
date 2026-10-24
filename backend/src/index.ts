@@ -12,6 +12,7 @@ import { sosRouter } from "./routes/sos";
 import { pushRouter } from "./routes/push";
 import { commandsRouter } from "./routes/commands";
 import { appVersionRouter } from "./routes/appVersion";
+import { childrenRouter } from "./routes/children";
 import path from "path";
 
 const app = express();
@@ -35,6 +36,7 @@ app.use("/sos", sosRouter);
 app.use("/push", pushRouter);
 app.use("/commands", commandsRouter);
 app.use("/app", appVersionRouter);
+app.use("/children", childrenRouter);
 
 const httpServer = createServer(app);
 initSocket(httpServer);

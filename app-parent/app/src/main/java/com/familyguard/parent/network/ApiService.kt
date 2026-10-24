@@ -59,4 +59,7 @@ interface ApiService {
 
     @GET("app/parent/latest")
     suspend fun getLatestAppVersion(): Response<AppVersionInfo>
+
+    @DELETE("children/{childDeviceId}")
+    suspend fun deleteChild(@Path("childDeviceId") childDeviceId: String): Response<Unit>
 }

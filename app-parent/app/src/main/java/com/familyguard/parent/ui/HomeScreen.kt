@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +27,7 @@ fun HomeScreen(prefs: Prefs, onOpenChild: (ChildLatest) -> Unit) {
     val scope = rememberCoroutineScope()
     var children by remember { mutableStateOf<List<ChildLatest>>(emptyList()) }
     var showPairingDialog by remember { mutableStateOf(false) }
+    var confirmDeleteChild by remember { mutableStateOf<ChildLatest?>(null) }
 
     LaunchedEffect(Unit) {
         val api = ApiClient.create(prefs)
@@ -58,7 +60,14 @@ fun HomeScreen(prefs: Prefs, onOpenChild: (ChildLatest) -> Unit) {
                                 else "Sin datos de ubicación todavía"
                             )
                         },
-                        trailingContent = { child.batteryLevel?.let { Text("🔋$it%") } },
+                        trailingContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                child.batteryLevel?.let { Text("🔋$it%") }
+                                IconButton(onClick = { confirmDeleteChild = child }) {
+                                    Icon(Icons.Filled.Delete, contentDescription = "Eliminar a ${child.childName}")
+                                }
+                            }
+                        },
                         modifier = Modifier.clickable { onOpenChild(child) }
                     )
                     HorizontalDivider()
@@ -71,6 +80,26 @@ fun HomeScreen(prefs: Prefs, onOpenChild: (ChildLatest) -> Unit) {
         PairingDialog(
             prefs = prefs,
             onDismiss = { showPairingDialog = false },
+        )
+    }
+
+    confirmDeleteChild?.let { child ->
+        AlertDialog(
+            onDismissRequest = { confirmDeleteChild = null },
+            title = { Text("¿Eliminar a ${child.childName}?") },
+            text = { Text("Se borra el perfil y todo su historial (ubicaciones, alertas, zonas). El teléfono va a tener que emparejarse de nuevo con un código.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeleteChild = null
+                    scope.launch {
+                        val api = ApiClient.create(prefs)
+                        val ok = runCatching { api.deleteChild(child.childDeviceId) }.getOrNull()
+                            ?.let { it.isSuccessful || it.code() == 204 } == true
+                        if (ok) children = children.filterNot { it.childDeviceId == child.childDeviceId }
+                    }
+                }) { Text("Eliminar") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDeleteChild = null }) { Text("Cancelar") } },
         )
     }
 }

@@ -55,7 +55,7 @@ model ChildDevice {
 
 model LocationPing {
   id            String      @id @default(uuid())
-  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
   childDeviceId String
   lat           Float
   lng           Float
@@ -70,7 +70,7 @@ model Geofence {
   id            String      @id @default(uuid())
   parent        Parent      @relation(fields: [parentId], references: [id])
   parentId      String
-  childDevice   ChildDevice? @relation(fields: [childDeviceId], references: [id])
+  childDevice   ChildDevice? @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
   childDeviceId String? // null = aplica a todos los hijos de este padre
   name          String
   lat           Float
@@ -83,9 +83,9 @@ model Geofence {
 
 model GeofenceEvent {
   id            String      @id @default(uuid())
-  geofence      Geofence    @relation(fields: [geofenceId], references: [id])
+  geofence      Geofence    @relation(fields: [geofenceId], references: [id], onDelete: Cascade)
   geofenceId    String
-  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
   childDeviceId String
   type          String // "ENTER" | "EXIT"
   occurredAt    DateTime    @default(now())
@@ -93,7 +93,7 @@ model GeofenceEvent {
 
 model AppUsageRecord {
   id            String      @id @default(uuid())
-  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
   childDeviceId String
   packageName   String
   appName       String
@@ -105,7 +105,7 @@ model AppUsageRecord {
 
 model BlockedApp {
   id            String      @id @default(uuid())
-  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
   childDeviceId String
   packageName   String
   dailyLimitMin Int? // null = bloqueada por completo
@@ -115,7 +115,7 @@ model BlockedApp {
 
 model SosAlert {
   id            String      @id @default(uuid())
-  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id])
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
   childDeviceId String
   lat           Float
   lng           Float
