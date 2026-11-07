@@ -44,6 +44,10 @@ model ChildDevice {
   lastSeenAt   DateTime?
   batteryLevel Int?
   createdAt    DateTime @default(now())
+  // Cuándo se avisó por última vez "dejó de reportar". Se limpia apenas
+  // vuelve a llegar un ping, así el próximo silencio avisa de nuevo en vez
+  // de quedar mudo para siempre después del primer aviso.
+  silenceAlertSentAt DateTime?
 
   locationPings   LocationPing[]
   geofences       Geofence[]

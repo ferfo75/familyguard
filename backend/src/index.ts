@@ -15,6 +15,7 @@ import { appVersionRouter } from "./routes/appVersion";
 import { childrenRouter } from "./routes/children";
 import { placesRouter } from "./routes/places";
 import { summaryRouter } from "./routes/summary";
+import { internalRouter } from "./routes/internal";
 import path from "path";
 
 const app = express();
@@ -34,6 +35,7 @@ app.use("/auth", authRouter);
 app.use("/location", locationRouter);
 app.use("/location", placesRouter);
 app.use("/location", summaryRouter);
+app.use("/internal", internalRouter);
 app.use("/geofences", geofenceRouter);
 app.use("/usage", usageRouter);
 app.use("/sos", sosRouter);

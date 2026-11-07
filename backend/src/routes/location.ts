@@ -46,7 +46,10 @@ locationRouter.post("/ping", requireChildAuth, async (req, res) => {
   });
   await db.childDevice.update({
     where: { id: req.childDeviceId! },
-    data: { lastSeenAt: new Date(), batteryLevel },
+    // silenceAlertSentAt se limpia acá: si antes se avisó "dejó de
+    // reportar" y ahora volvió a mandar un ping, el próximo silencio tiene
+    // que poder avisar de nuevo en vez de quedar apagado para siempre.
+    data: { lastSeenAt: new Date(), batteryLevel, silenceAlertSentAt: null },
   });
 
   broadcastToFamily(req.parentId!, "location:update", {
