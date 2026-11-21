@@ -83,6 +83,12 @@ export interface TrucoState {
   suspendedTruco: PendingTruco | null; // truco al que todavía hay que responder tras un envido
   winner: 0 | 1 | null;
   events: string[];
+  /** Lo que canta cada jugador, con número de orden: los clientes lo muestran en burbujas y lo dicen en voz alta. */
+  shouts: { n: number; seat: number; text: string }[];
+  shoutSeq: number;
+  /** Cuenta las bazas terminadas: cuando cambia, el cliente anima la baza que acaba de cerrarse. */
+  trickSeq: number;
+  lastTrickWinSeat: number | null;
 }
 
 export type Action =
@@ -122,10 +128,16 @@ export function createTruco(players: TrucoPlayer[], deck: Card[] = newDeck()): T
   const s: TrucoState = {
     kind: "truco", players, scores: [0, 0], handNo: 0, mano: players.length - 1, dealt: [], hands: [],
     tricks: [], table: [], lastTrick: [], turn: 0, trucoLevel: 1, trucoAcceptedBy: null, envidoDone: false,
-    pending: null, suspendedTruco: null, winner: null, events: [],
+    pending: null, suspendedTruco: null, winner: null, events: [], shouts: [], shoutSeq: 0, trickSeq: 0, lastTrickWinSeat: null,
   };
   dealHand(s, deck);
   return s;
+}
+
+function shout(s: TrucoState, seat: number, text: string) {
+  s.shoutSeq += 1;
+  s.shouts.push({ n: s.shoutSeq, seat, text });
+  if (s.shouts.length > 12) s.shouts.shift();
 }
 
 function dealHand(s: TrucoState, deck: Card[] = newDeck()) {
@@ -136,7 +148,6 @@ function dealHand(s: TrucoState, deck: Card[] = newDeck()) {
   s.hands = s.dealt.map((h) => [...h]);
   s.tricks = [];
   s.table = [];
-  s.lastTrick = [];
   s.turn = s.mano;
   s.trucoLevel = 1;
   s.trucoAcceptedBy = null;
@@ -190,20 +201,21 @@ function trickWinner(s: TrucoState): 0 | 1 | null {
   return power[0] > power[1] ? 0 : 1;
 }
 
-function envidoOutcome(s: TrucoState): { winner: 0 | 1; points: [number, number] } {
+function envidoOutcome(s: TrucoState): { winner: 0 | 1; points: [number, number]; seats: [number, number] } {
   const n = s.players.length;
   const best: [number, number] = [-1, -1];
+  const seats: [number, number] = [s.mano, s.mano];
   let winner: 0 | 1 = teamOf(s.mano);
   // En empate gana el equipo del que está más cerca de la mano.
   for (let k = 0; k < n; k++) {
     const seat = (s.mano + k) % n;
     const t = teamOf(seat);
     const v = envidoPoints(s.dealt[seat]);
-    if (v > best[t]) best[t] = v;
+    if (v > best[t]) { best[t] = v; seats[t] = seat; }
   }
   if (best[0] > best[1]) winner = 0;
   else if (best[1] > best[0]) winner = 1;
-  return { winner, points: best };
+  return { winner, points: best, seats };
 }
 
 /** Puntos de una falta envido según la regla de la casa. */
@@ -290,16 +302,17 @@ export function apply(s: TrucoState, seat: number, a: Action): Result {
     case "mazo": {
       if (!allowed.mazo) return fail("not_your_turn");
       say(s, `${nm(s, seat)} se va al mazo`);
+      shout(s, seat, "¡Me voy al mazo!");
       endHand(s, other(team), s.trucoLevel, "mazo");
       return OK;
     }
     case "call": {
       if (!allowed.calls.includes(a.call)) return fail("call_not_allowed");
-      return doCall(s, team, a.call);
+      return doCall(s, seat, a.call);
     }
     case "respond": {
       if (!allowed.respond || !s.pending) return fail("nothing_to_answer");
-      return a.r === "quiero" ? accept(s, team) : reject(s, team);
+      return a.r === "quiero" ? accept(s, seat) : reject(s, seat);
     }
   }
   return fail("bad_action");
@@ -323,6 +336,8 @@ function afterPlay(s: TrucoState): Result {
     say(s, "Baza parda");
   }
   s.lastTrick = s.table;
+  s.lastTrickWinSeat = winnerSeat;
+  s.trickSeq += 1;
   s.table = [];
   const hw = handWinner(s.tricks, s.mano);
   if (hw !== null) {
@@ -333,8 +348,15 @@ function afterPlay(s: TrucoState): Result {
   return OK;
 }
 
-function doCall(s: TrucoState, team: 0 | 1, call: EnvidoCall | TrucoCall): Result {
+const SHOUT_TEXT: Record<EnvidoCall | TrucoCall, string> = {
+  envido: "¡Envido!", real: "¡Real envido!", falta: "¡Falta envido!",
+  truco: "¡Truco!", retruco: "¡Quiero retruco!", valecuatro: "¡Quiero vale cuatro!",
+};
+
+function doCall(s: TrucoState, seat: number, call: EnvidoCall | TrucoCall): Result {
+  const team = teamOf(seat);
   const who = teamName(s, team);
+  shout(s, seat, SHOUT_TEXT[call]);
   if (call === "envido" || call === "real" || call === "falta") {
     if (s.pending?.type === "truco") {
       s.suspendedTruco = s.pending; // el truco queda esperando su respuesta
@@ -355,8 +377,10 @@ function doCall(s: TrucoState, team: 0 | 1, call: EnvidoCall | TrucoCall): Resul
   return OK;
 }
 
-function accept(s: TrucoState, team: 0 | 1): Result {
+function accept(s: TrucoState, seat: number): Result {
+  const team = teamOf(seat);
   const p = s.pending!;
+  shout(s, seat, "¡Quiero!");
   if (p.type === "truco") {
     s.trucoLevel = p.level;
     s.trucoAcceptedBy = team;
@@ -365,8 +389,10 @@ function accept(s: TrucoState, team: 0 | 1): Result {
     return OK;
   }
   // envido aceptado
-  const { winner, points } = envidoOutcome(s);
+  const { winner, points, seats } = envidoOutcome(s);
   const chain = p.chain;
+  shout(s, seats[winner], `¡Tengo ${points[winner]}!`);
+  shout(s, seats[other(winner)], "Son buenas");
   s.envidoDone = true;
   s.pending = s.suspendedTruco; // vuelve el truco pendiente, si lo había
   s.suspendedTruco = null;
@@ -378,9 +404,11 @@ function accept(s: TrucoState, team: 0 | 1): Result {
   return OK;
 }
 
-function reject(s: TrucoState, team: 0 | 1): Result {
+function reject(s: TrucoState, seat: number): Result {
+  const team = teamOf(seat);
   const p = s.pending!;
   const caller = other(team);
+  shout(s, seat, "No quiero");
   if (p.type === "truco") {
     say(s, `${teamName(s, team)}: No quiero`);
     endHand(s, caller, p.level - 1, "truco no querido");
@@ -412,6 +440,8 @@ export function viewFor(s: TrucoState, seat: number) {
     myHand: s.hands[seat],
     table: s.table,
     lastTrick: s.lastTrick,
+    trickSeq: s.trickSeq,
+    lastTrickWinSeat: s.lastTrickWinSeat,
     tricks: s.tricks,
     turn: s.turn,
     trucoLevel: s.trucoLevel,
@@ -419,6 +449,7 @@ export function viewFor(s: TrucoState, seat: number) {
     allowed: allowedFor(s, seat),
     winner: s.winner,
     events: s.events.slice(-8),
+    shouts: s.shouts,
   };
 }
 

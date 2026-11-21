@@ -31,7 +31,11 @@ export interface LudoState {
   dice: number | null; // tirada pendiente de mover
   movable: number[]; // fichas que se pueden mover con esa tirada
   sixes: number;
-  lastRoll: { seat: number; value: number } | null;
+  lastRoll: { seat: number; value: number; n: number } | null;
+  rollSeq: number;
+  /** Cada jugada con su recorrido, para que las pantallas muestren moverse la ficha paso a paso. */
+  moves: { n: number; seat: number; piece: number; from: number; to: number; captured: { seat: number; piece: number; from: number }[] }[];
+  moveSeq: number;
   winner: number | null;
   events: string[];
 }
@@ -46,7 +50,7 @@ export function createLudo(players: LudoPlayer[]): LudoState {
   const offsets = players.length === 2 ? [0, 26] : START_OFFSETS.slice(0, players.length);
   return {
     kind: "ludo", players, offsets, pieces: players.map(() => [0, 0, 0, 0]), turn: 0, dice: null,
-    movable: [], sixes: 0, lastRoll: null, winner: null, events: [`Empieza ${players[0].name}`],
+    movable: [], sixes: 0, lastRoll: null, rollSeq: 0, moves: [], moveSeq: 0, winner: null, events: [`Empieza ${players[0].name}`],
   };
 }
 
@@ -85,7 +89,8 @@ export function apply(s: LudoState, seat: number, a: Action, rng: () => number =
   if (a.t === "roll") {
     if (s.dice !== null) return fail("move_first");
     const dice = rng();
-    s.lastRoll = { seat, value: dice };
+    s.rollSeq += 1;
+    s.lastRoll = { seat, value: dice, n: s.rollSeq };
     if (dice === 6) s.sixes += 1;
     if (dice === 6 && s.sixes >= 3) {
       say(s, `${me} sacó tres 6 seguidos y pierde el turno`);
@@ -112,12 +117,14 @@ export function apply(s: LudoState, seat: number, a: Action, rng: () => number =
   s.pieces[seat][a.piece] = to;
   let extra = s.dice === 6;
 
+  const captured: { seat: number; piece: number; from: number }[] = [];
   const idx = trackIndex(s, seat, to);
   if (idx !== null && !SAFE.has(idx)) {
     for (let o = 0; o < s.players.length; o++) {
       if (o === seat) continue;
       s.pieces[o].forEach((p, i) => {
         if (trackIndex(s, o, p) === idx) {
+          captured.push({ seat: o, piece: i, from: p });
           s.pieces[o][i] = 0;
           extra = true;
           say(s, `${me} se comió una ficha de ${s.players[o].name}`);
@@ -125,6 +132,9 @@ export function apply(s: LudoState, seat: number, a: Action, rng: () => number =
       });
     }
   }
+  s.moveSeq += 1;
+  s.moves.push({ n: s.moveSeq, seat, piece: a.piece, from, to, captured });
+  if (s.moves.length > 12) s.moves.shift();
   if (to === HOME) {
     say(s, `${me} metió una ficha en la casa`);
     if (s.pieces[seat].every((p) => p === HOME)) {
@@ -151,6 +161,7 @@ export function viewFor(s: LudoState, seat: number) {
     dice: s.dice,
     movable: s.turn === seat ? s.movable : [],
     lastRoll: s.lastRoll,
+    moves: s.moves,
     winner: s.winner,
     allowed: { roll: s.winner === null && s.turn === seat && s.dice === null, move: s.winner === null && s.turn === seat && s.dice !== null },
     events: s.events.slice(-8),
