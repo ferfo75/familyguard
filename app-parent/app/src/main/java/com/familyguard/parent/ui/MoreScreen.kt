@@ -26,12 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.familyguard.parent.data.Prefs
 import com.familyguard.parent.network.ChildLatest
 import com.familyguard.parent.ui.theme.MemberColors
 
 /** "Más": lo que antes era una pestaña por separado (Zonas, Uso de apps, SOS), para que la barra inferior no se sature. */
 @Composable
-fun MoreScreen(children: List<ChildLatest>, onGames: () -> Unit, onZones: () -> Unit, onSos: () -> Unit, onUsage: (ChildLatest) -> Unit) {
+fun MoreScreen(prefs: Prefs, children: List<ChildLatest>, onGames: () -> Unit, onZones: () -> Unit, onSos: () -> Unit, onUsage: (ChildLatest) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Más opciones", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(12.dp))
@@ -67,6 +68,9 @@ fun MoreScreen(children: List<ChildLatest>, onGames: () -> Unit, onZones: () -> 
                 Spacer(Modifier.height(8.dp))
             }
         }
+        Spacer(Modifier.height(18.dp))
+        AccountSection(prefs)
+        Spacer(Modifier.height(24.dp))
     }
 }
 

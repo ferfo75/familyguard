@@ -5,6 +5,15 @@ data class LoginRequest(val email: String, val password: String)
 data class ParentInfo(val id: String, val email: String, val name: String)
 data class AuthResponse(val token: String, val parent: ParentInfo)
 
+// Otros adultos de la familia (la madre, por ejemplo)
+data class RedeemAdultRequest(val code: String, val name: String, val email: String, val password: String)
+data class AdultInviteResponse(val code: String, val expiresAt: String)
+data class AdultInfo(val id: String, val name: String, val email: String)
+data class AdultsMe(val owner: Boolean)
+data class AdultOwner(val name: String)
+data class AdultsResponse(val me: AdultsMe, val owner: AdultOwner, val adults: List<AdultInfo>)
+data class UnregisterPushTokenRequest(val token: String)
+
 data class CreatePairingRequest(val childName: String)
 data class CreatePairingResponse(val code: String, val expiresAt: String)
 

@@ -1,6 +1,6 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
-import { verifySocketToken } from "./middleware/auth";
+import { verifySocketToken, adultStillInFamily } from "./middleware/auth";
 import { db } from "./db";
 import * as games from "./games/rooms";
 
@@ -13,11 +13,17 @@ let io: Server;
 export function initSocket(httpServer: HttpServer) {
   io = new Server(httpServer, { cors: { origin: "*" } });
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
     if (!token) return next(new Error("missing_token"));
     const payload = verifySocketToken(token);
     if (!payload) return next(new Error("invalid_token"));
+    try {
+      // Un adulto que el dueño quitó de la familia no puede seguir conectado con su sesión vieja.
+      if (payload.kind === "parent" && !(await adultStillInFamily(payload))) return next(new Error("invalid_token"));
+    } catch {
+      return next(new Error("try_again"));
+    }
     (socket.data as any).auth = payload;
     next();
   });
@@ -45,11 +51,17 @@ export function initSocket(httpServer: HttpServer) {
 type Ack = (res: any) => void;
 
 function playerKey(auth: any): string {
-  return auth.kind === "parent" ? `p:${auth.parentId}` : `c:${auth.childDeviceId}`;
+  // Cada adulto es un jugador distinto: la madre y el padre ya no comparten asiento en los juegos.
+  if (auth.kind === "parent") return auth.adultId ? `a:${auth.adultId}` : `p:${auth.parentId}`;
+  return `c:${auth.childDeviceId}`;
 }
 
 async function playerName(auth: any): Promise<string> {
   try {
+    if (auth.kind === "parent" && auth.adultId) {
+      const a = await db.adult.findUnique({ where: { id: auth.adultId }, select: { name: true } });
+      return a?.name || "Mamá/Papá";
+    }
     if (auth.kind === "parent") {
       const p = await db.parent.findUnique({ where: { id: auth.parentId }, select: { name: true } });
       return p?.name || "Mamá/Papá";

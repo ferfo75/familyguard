@@ -21,6 +21,31 @@ model Parent {
   geofences    Geofence[]
   pairingCodes PairingCode[]
   pushTokens   PushToken[]
+  adults       Adult[]
+  adultInvites AdultInvite[]
+}
+
+// Otro adulto de la misma familia (la madre, por ejemplo): entra con su propio email y contraseña
+// y ve a los mismos hijos que la cuenta principal. Todo el sistema sigue filtrando por Parent.id.
+model Adult {
+  id           String   @id @default(uuid())
+  parent       Parent   @relation(fields: [parentId], references: [id])
+  parentId     String
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+// Invitación de un solo uso y corta duración para sumar un adulto.
+model AdultInvite {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  parent    Parent    @relation(fields: [parentId], references: [id])
+  parentId  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 }
 
 model PairingCode {

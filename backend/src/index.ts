@@ -21,6 +21,8 @@ import { feedRouter, checkinsRouter } from "./routes/feed";
 import path from "path";
 
 const app = express();
+// Detrás del proxy de Render, req.ip tiene que ser el del cliente real (lo usa el límite de intentos de invitación).
+app.set("trust proxy", 1);
 app.use(cors());
 // El límite default de express.json() (100kb) no alcanza para el audio del
 // SOS en base64; lo subimos un poco con margen.

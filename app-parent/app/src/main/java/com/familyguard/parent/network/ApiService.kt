@@ -82,6 +82,22 @@ interface ApiService {
     @POST("push/register")
     suspend fun registerPushToken(@Body body: RegisterPushTokenRequest): Response<Unit>
 
+    /** Al cerrar sesión, este celular deja de recibir las notificaciones de la familia. */
+    @POST("push/unregister")
+    suspend fun unregisterPushToken(@Body body: UnregisterPushTokenRequest): Response<Unit>
+
+    @POST("auth/adults/invite")
+    suspend fun inviteAdult(): Response<AdultInviteResponse>
+
+    @POST("auth/adults/redeem")
+    suspend fun redeemAdultInvite(@Body body: RedeemAdultRequest): Response<AuthResponse>
+
+    @GET("auth/adults")
+    suspend fun getAdults(): Response<AdultsResponse>
+
+    @DELETE("auth/adults/{id}")
+    suspend fun removeAdult(@Path("id") id: String): Response<Unit>
+
     @POST("commands/{childDeviceId}/ring")
     suspend fun ringDevice(@Path("childDeviceId") childDeviceId: String): Response<Unit>
 

@@ -76,6 +76,8 @@ class MainActivity : ComponentActivity() {
                                     message = if (json.isNull("message") || !json.has("message")) null else json.getString("message"),
                                 )
                             }
+                            // Cada inicio de sesión registra este celular para recibir los avisos de la familia.
+                            com.familyguard.parent.push.PushRegistration.register(prefs)
                             updateInfo = com.familyguard.parent.update.AppUpdater.checkForUpdate(prefs)
 
                             // Sesión deslizante: si pasó más de un día desde la última renovación, se pide un
@@ -183,6 +185,7 @@ class MainActivity : ComponentActivity() {
                 composable("more") {
                     val latest by LatestRepository.state.collectAsState()
                     MoreScreen(
+                        prefs = prefs,
                         children = latest.children,
                         onGames = { navController.navigate("games") },
                         onZones = { navController.navigate("geofences") },

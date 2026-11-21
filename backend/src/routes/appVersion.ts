@@ -12,10 +12,10 @@ const CHILD_APP_VERSION = {
 };
 
 const PARENT_APP_VERSION = {
-  versionCode: 13,
-  versionName: "0.9.0",
+  versionCode: 14,
+  versionName: "0.9.1",
   downloadUrl: "/apks/familyguard-padre-latest.apk",
-  notes: "Nuevo diseño. La ubicación se ve siempre (con aviso si está desactualizada), los hijos ya no se pierden, misiones con recompensa y foto, novedades de la familia y juegos (Truco y Ludo).",
+  notes: "Nuevo: cada adulto tiene su propia cuenta (invitá a la madre desde Más), botón para cerrar sesión / cambiar de usuario, y los juegos reconocen a cada uno. Incluye el diseño nuevo, misiones con foto, novedades y juegos (Truco y Ludo).",
 };
 
 // Las dos apps llaman esto al arrancar para saber si hay una versión más

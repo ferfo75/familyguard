@@ -16,3 +16,11 @@ pushRouter.post("/register", requireParentAuth, async (req, res) => {
   });
   res.status(201).json({ ok: true });
 });
+
+// Al cerrar sesión, ese celular deja de recibir las notificaciones de la familia.
+pushRouter.post("/unregister", requireParentAuth, async (req, res) => {
+  const token = String(req.body?.token ?? "").trim();
+  if (!token) return res.status(400).json({ error: "token_required" });
+  await db.pushToken.deleteMany({ where: { token, parentId: req.parentId! } });
+  res.json({ ok: true });
+});
