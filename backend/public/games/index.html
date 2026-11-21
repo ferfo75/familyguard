@@ -15,11 +15,12 @@
       --moss-soft:#24402b; --honey-soft:#4a3410; --on-honey:#FBE6BF; --on-moss:#D7EBD9; --err-bg:#5a1f1b; --err-fg:#FBD5D1; }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
-  html,body { margin:0; height:100%; overflow:hidden; background:var(--cream); color:var(--cocoa);
+  html { overflow:hidden; } /* el recorte va solo en <html>: el WebView de la app da alto 0 a <body> y con overflow:hidden ahí se ocultaba todo */
+  html,body { margin:0; height:100%; background:var(--cream); color:var(--cocoa);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior:none; touch-action:manipulation; }
   h1,h2,h3 { font-family: Georgia, "Times New Roman", serif; margin:0; }
-  /* Toda la pantalla de juego entra en la ventana: nada de bajar para ver los puntos. */
-  #app { height:100vh; height:100dvh; max-width:520px; margin:0 auto; padding:6px 10px calc(6px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; }
+  /* Toda la pantalla de juego entra en la ventana. El alto es 100% (no vh/dvh): dentro del WebView de la app esas unidades pueden quedar en 0. */
+  #app { height:100%; max-width:520px; margin:0 auto; padding:6px 10px calc(6px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; }
   #bn { flex:none; }
   #scr { flex:1; min-height:0; display:flex; flex-direction:column; gap:6px; }
   #scr.pg { overflow-y:auto; gap:10px; padding:4px 0 8px; }
@@ -155,6 +156,17 @@
     move_first: "Primero mové una ficha", roll_first: "Primero tirá el dado", piece_not_movable: "Esa ficha no se puede mover con ese número",
     bad_action: "Jugada inválida", server_error: "Error del servidor, probá de nuevo", bad_game: "Juego inválido",
   };
+
+  // El WebView de la app le da al documento un alto de 0 aunque la ventana mida 786: ni vh, ni dvh, ni height:100% sirven ahí.
+  // Se mide con window.innerHeight (que sí es correcto) y se vuelve a medir si cambia (teclado, rotación, barras del sistema).
+  function fitApp() {
+    const h = window.innerHeight || 0;
+    const app = $("app");
+    if (h > 120 && app.style.height !== h + "px") { app.style.height = h + "px"; document.documentElement.style.height = h + "px"; document.body.style.height = h + "px"; window.dispatchEvent(new Event("resize")); }
+  }
+  fitApp();
+  window.addEventListener("resize", fitApp);
+  setInterval(fitApp, 600);
 
   if (!token) { scr.innerHTML = '<div class="box"><h2>Juegos en familia</h2><p class="muted">Abrí esta pantalla desde la app FamilyGuard.</p></div>'; return; }
 
@@ -483,14 +495,14 @@
       const g = v.game;
       if (!L) {
         build(g);
-        L = { g, disp: g.players.map((p) => p.pieces.slice()), lastMove: g.moves.reduce((m, x) => Math.max(m, x.n), 0), lastRoll: g.lastRoll ? g.lastRoll.n : 0, shownWin: false };
+        L = { g, disp: g.players.map((p) => p.pieces.slice()), lastMove: (g.moves || []).reduce((m, x) => Math.max(m, x.n), 0), lastRoll: g.lastRoll ? g.lastRoll.n : 0, shownWin: false };
         $("pcs").classList.add("init"); place(); ui(g);
         requestAnimationFrame(() => requestAnimationFrame(() => { const p = $("pcs"); if (p) p.classList.remove("init"); }));
         return;
       }
       L.g = g;
       if (g.lastRoll && g.lastRoll.n > L.lastRoll) { L.lastRoll = g.lastRoll.n; await rollAnim(g.lastRoll, g); }
-      for (const mv of g.moves.filter((m) => m.n > L.lastMove)) { L.lastMove = mv.n; await moveAnim(mv); }
+      for (const mv of (g.moves || []).filter((m) => m.n > L.lastMove)) { L.lastMove = mv.n; await moveAnim(mv); }
       L.disp = g.players.map((p) => p.pieces.slice()); place(); ui(g);
     }
     return { state, reset };
@@ -513,7 +525,7 @@
     function build(g) {
       const n = g.players.length, me = g.seat;
       const posOf = (seat) => { const rel = (seat - me + n) % n; return n === 2 ? (rel === 0 ? "bottom" : "top") : ["bottom", "right", "top", "left"][rel]; };
-      T = { g, n, me, posOf, lastShout: g.shouts.reduce((m, x) => Math.max(m, x.n), 0), lastTrick: g.trickSeq, lastHandSeq: g.handSeq, handNo: 0, shownWin: false, handSig: "", actSig: "", bubTimers: {} };
+      T = { g, n, me, posOf, lastShout: (g.shouts || []).reduce((m, x) => Math.max(m, x.n), 0), lastTrick: g.trickSeq, lastHandSeq: g.handSeq, handNo: 0, shownWin: false, handSig: "", actSig: "", bubTimers: {} };
       preloadCards();
       const seats = g.players.map((p) => {
         const pos = posOf(p.seat), mine = p.team === g.team;
@@ -608,7 +620,7 @@
       }
       T.g = g;
       // 1) lo que cantaron: burbuja + voz
-      const newShouts = g.shouts.filter((s) => s.n > T.lastShout);
+      const newShouts = (g.shouts || []).filter((s) => s.n > T.lastShout);
       for (const sh of newShouts) { T.lastShout = sh.n; showShout(sh); }
       const trickClosed = g.trickSeq > T.lastTrick, handEnded = g.handSeq > T.lastHandSeq;
       if (trickClosed || handEnded) {
