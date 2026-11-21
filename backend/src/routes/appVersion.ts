@@ -5,17 +5,17 @@ export const appVersionRouter = Router();
 // Se actualiza a mano cada vez que se sube un APK nuevo a public/apks/.
 // Simple a propósito: no vale la pena una tabla en la base para esto.
 const CHILD_APP_VERSION = {
-  versionCode: 13,
-  versionName: "0.8.0",
+  versionCode: 14,
+  versionName: "0.8.1",
   downloadUrl: "/apks/familyguard-hijo-latest.apk",
-  notes: "Nuevo diseño. Misiones con foto, botón \"Llegué bien\", estado del teléfono, no se pierde ninguna ubicación aunque no haya señal, y juegos en familia (Truco y Ludo).",
+  notes: "Arreglo importante: después de actualizar la app, el seguimiento de ubicación se reactiva solo (antes quedaba apagado hasta abrirla). Abrila una vez después de instalar esta versión.",
 };
 
 const PARENT_APP_VERSION = {
-  versionCode: 14,
-  versionName: "0.9.1",
+  versionCode: 15,
+  versionName: "0.9.2",
   downloadUrl: "/apks/familyguard-padre-latest.apk",
-  notes: "Nuevo: cada adulto tiene su propia cuenta (invitá a la madre desde Más), botón para cerrar sesión / cambiar de usuario, y los juegos reconocen a cada uno. Incluye el diseño nuevo, misiones con foto, novedades y juegos (Truco y Ludo).",
+  notes: "Arreglo: los nombres de las pestañas ya no se parten en celulares angostos, y el aviso de \"no reporta\" explica qué hacer. Incluye cuentas por adulto, cerrar sesión y los juegos.",
 };
 
 // Las dos apps llaman esto al arrancar para saber si hay una versión más

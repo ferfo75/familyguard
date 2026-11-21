@@ -159,7 +159,7 @@ fun FamilySummaryCard(parentName: String?, children: List<ChildLatest>, now: Lon
         stale.isNotEmpty() -> SummaryText(
             MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer,
             "Atención",
-            "${names(stale)} ${if (stale.size == 1) "no reporta" else "no reportan"} hace más de 2 horas. Conviene llamar o revisar el teléfono.",
+            "${names(stale)} ${if (stale.size == 1) "no reporta" else "no reportan"} hace más de 2 horas. Conviene llamar o revisar el teléfono: abrir la app FamilyGuard en su celular suele reactivarla.",
         )
         aging.isNotEmpty() -> SummaryText(
             MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer,

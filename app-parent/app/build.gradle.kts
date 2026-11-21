@@ -13,8 +13,8 @@ android {
         applicationId = "com.familyguard.parent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.9.1"
+        versionCode = 15
+        versionName = "0.9.2"
         buildConfigField(
             "String", "API_BASE_URL",
             "\"${project.findProperty("FAMILYGUARD_API_BASE_URL") ?: "http://10.0.2.2:4000/"}\""

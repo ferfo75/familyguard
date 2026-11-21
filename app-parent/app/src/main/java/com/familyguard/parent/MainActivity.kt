@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -217,33 +218,45 @@ class MainActivity : ComponentActivity() {
                 selected = current == "home",
                 onClick = { goTab("home") },
                 icon = { Icon(Icons.Filled.Groups, null) },
-                label = { Text("Familia") },
+                label = { TabLabel("Familia") },
             )
             NavigationBarItem(
                 selected = current == "map",
                 onClick = { goTab("map") },
                 icon = { Icon(Icons.Filled.Place, null) },
-                label = { Text("Mapa") },
+                label = { TabLabel("Mapa") },
             )
             NavigationBarItem(
                 selected = current == "tasks",
                 onClick = { goTab("tasks") },
                 icon = { Icon(Icons.Filled.TaskAlt, null) },
-                label = { Text("Misiones") },
+                label = { TabLabel("Misiones") },
             )
             NavigationBarItem(
                 selected = current == "feed",
                 onClick = { goTab("feed") },
                 icon = { Icon(Icons.Filled.Notifications, null) },
-                label = { Text("Novedades") },
+                label = { TabLabel("Novedades") },
             )
             NavigationBarItem(
                 // Zonas, Uso y SOS viven dentro de "Más".
                 selected = current in setOf("more", "games", "geofences", "usage", "sos"),
                 onClick = { goTab("more") },
                 icon = { Icon(Icons.Filled.MoreHoriz, null) },
-                label = { Text("Más") },
+                label = { TabLabel("Más") },
             )
         }
     }
+}
+
+/** Nombre de una pestaña: una sola línea y chico, así no se parte en celulares angostos o con letra grande ("Mision/es"). */
+@Composable
+private fun TabLabel(text: String) {
+    Text(
+        text,
+        maxLines = 1,
+        softWrap = false,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+        fontSize = 11.sp,
+    )
 }
