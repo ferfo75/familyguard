@@ -37,7 +37,13 @@ app.use("/apks", express.static(path.join(__dirname, "..", "public", "apks")));
 
 // Pantalla de juegos en familia (Truco y Ludo): una sola página que abren las dos apps en un WebView.
 // No lleva datos ni secretos: el token llega en el fragmento (#t=...) que el navegador nunca envía al servidor.
-app.use("/games", express.static(path.join(__dirname, "..", "public", "games"), { maxAge: 0 }));
+// La página se revalida siempre (así llegan las mejoras); las cartas y las voces casi no cambian y se guardan una semana.
+app.use("/games", express.static(path.join(__dirname, "..", "public", "games"), {
+  maxAge: 0,
+  setHeaders: (res, filePath) => {
+    if (/[\\/](cards|voz)[\\/]/.test(filePath)) res.setHeader("Cache-Control", "public, max-age=604800");
+  },
+}));
 
 app.use("/auth", authRouter);
 app.use("/location", locationRouter);

@@ -89,6 +89,9 @@ export interface TrucoState {
   /** Cuenta las bazas terminadas: cuando cambia, el cliente anima la baza que acaba de cerrarse. */
   trickSeq: number;
   lastTrickWinSeat: number | null;
+  /** Cómo terminó la última mano (para mostrarlo antes de repartir la siguiente). */
+  handSeq: number;
+  lastHand: { n: number; winner: 0 | 1; points: number; why: string } | null;
 }
 
 export type Action =
@@ -128,7 +131,7 @@ export function createTruco(players: TrucoPlayer[], deck: Card[] = newDeck()): T
   const s: TrucoState = {
     kind: "truco", players, scores: [0, 0], handNo: 0, mano: players.length - 1, dealt: [], hands: [],
     tricks: [], table: [], lastTrick: [], turn: 0, trucoLevel: 1, trucoAcceptedBy: null, envidoDone: false,
-    pending: null, suspendedTruco: null, winner: null, events: [], shouts: [], shoutSeq: 0, trickSeq: 0, lastTrickWinSeat: null,
+    pending: null, suspendedTruco: null, winner: null, events: [], shouts: [], shoutSeq: 0, trickSeq: 0, lastTrickWinSeat: null, handSeq: 0, lastHand: null,
   };
   dealHand(s, deck);
   return s;
@@ -169,6 +172,8 @@ function award(s: TrucoState, team: 0 | 1, points: number, why: string) {
 }
 
 function endHand(s: TrucoState, winner: 0 | 1, points: number, why: string) {
+  s.handSeq += 1;
+  s.lastHand = { n: s.handSeq, winner, points, why };
   award(s, winner, points, why);
   if (s.winner === null) dealHand(s);
 }
@@ -442,6 +447,8 @@ export function viewFor(s: TrucoState, seat: number) {
     lastTrick: s.lastTrick,
     trickSeq: s.trickSeq,
     lastTrickWinSeat: s.lastTrickWinSeat,
+    handSeq: s.handSeq,
+    lastHand: s.lastHand,
     tricks: s.tricks,
     turn: s.turn,
     trucoLevel: s.trucoLevel,

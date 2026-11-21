@@ -1,0 +1,11 @@
+Cartas de la baraja española (patrón castellano)
+
+Origen: https://commons.wikimedia.org/wiki/File:Baraja_espa%C3%B1ola_completa.png
+Autoría: Basquetteur, a partir del trabajo de Germarquezm (Baraja española.svg), con elementos del
+laboratorio gráfico de Wikipedia y de GnuBond.
+Licencia: Creative Commons Atribución-CompartirIgual 3.0 (CC BY-SA 3.0)
+          https://creativecommons.org/licenses/by-sa/3.0/deed.es
+
+Cambios: la lámina original (2496 x 1595 px) se recortó en cartas individuales, se quitaron el 8 y el 9
+(no se usan en el Truco) y se redujeron a 180 px de ancho en formato WebP.
+Estas imágenes derivadas se distribuyen bajo la misma licencia CC BY-SA 3.0.
