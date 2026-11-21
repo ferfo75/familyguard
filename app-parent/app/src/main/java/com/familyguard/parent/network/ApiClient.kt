@@ -20,7 +20,13 @@ class AuthInterceptor(private val prefs: Prefs) : Interceptor {
         val request = if (token != null) {
             original.newBuilder().addHeader("Authorization", "Bearer $token").build()
         } else original
-        return chain.proceed(request)
+        val response = chain.proceed(request)
+        // 401 con token = el servidor ya no acepta la sesión (venció): se cierra
+        // sola y la app vuelve al login, en vez de quedar con pantallas vacías.
+        if (token != null && response.code == 401) {
+            runBlocking { prefs.expireSession() }
+        }
+        return response
     }
 }
 

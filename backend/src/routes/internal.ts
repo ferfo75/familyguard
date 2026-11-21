@@ -31,11 +31,17 @@ internalRouter.post("/check-silence", async (req, res) => {
   for (const child of silentChildren) {
     const tokens = (await db.pushToken.findMany({ where: { parentId: child.parentId } })).map((t) => t.token);
     const lastSeenLabel = child.lastSeenAt ? child.lastSeenAt.toLocaleString("es-AR") : "nunca";
-    await sendPushToTokens(
-      tokens,
-      `📴 Sin noticias de ${child.name}`,
-      `No reporta ubicación desde ${lastSeenLabel}. Revisá que tenga la app abierta y batería.`,
-    );
+    // Con el latido se puede decir QUÉ pasa: la app viva pero sin GPS, o la app directamente detenida.
+    const heartbeatRecent = child.lastHeartbeatAt != null && Date.now() - child.lastHeartbeatAt.getTime() < 40 * 60 * 1000;
+    let body: string;
+    if (heartbeatRecent) {
+      body = `La app está activa pero no manda ubicación desde ${lastSeenLabel}. Revisá que tenga el GPS prendido y el permiso de ubicación "todo el tiempo".`;
+    } else if (child.healthBatteryUnrestricted === false) {
+      body = `No reporta desde ${lastSeenLabel}. Tiene la batería restringida: es la causa más común en Motorola. Abrí la app del hijo/a y poné "Sin restricciones".`;
+    } else {
+      body = `No reporta ubicación desde ${lastSeenLabel}. Puede estar apagado, sin datos, o con la app detenida: conviene abrirla una vez.`;
+    }
+    await sendPushToTokens(tokens, `📴 Sin noticias de ${child.name}`, body);
     await db.childDevice.update({ where: { id: child.id }, data: { silenceAlertSentAt: new Date() } });
     notified += 1;
   }

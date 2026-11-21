@@ -29,7 +29,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import com.familyguard.parent.data.LatestRepository
 import com.familyguard.parent.data.Prefs
+import com.familyguard.parent.ui.theme.MemberColors
+import com.familyguard.parent.util.TimeAgo
 import com.familyguard.parent.network.ApiClient
 import com.familyguard.parent.network.FrequentPlace
 import com.familyguard.parent.network.HistoryPoint
@@ -62,6 +65,12 @@ private data class ChildMapState(
 
 private fun Float?.toKmh(): String? = this?.let { "%.0f km/h".format(it * 3.6f) }
 
+/** Si el dato está viejo, el marcador lo dice ("· hace 3 h") en vez de aparentar que es de ahora. */
+private fun staleSuffix(lastSeenIso: String?): String {
+    val f = TimeAgo.freshness(lastSeenIso)
+    return if (f == TimeAgo.Freshness.Fresh || f == TimeAgo.Freshness.Unknown) "" else " · ${TimeAgo.text(lastSeenIso)}"
+}
+
 // Lo que detecta Google Play Services (confianza, no una medición exacta),
 // por eso se muestra como "parece estar..." y no como un hecho.
 private fun String?.toActivityLabel(): String? = when (this) {
@@ -75,10 +84,7 @@ private fun String?.toActivityLabel(): String? = when (this) {
 
 // Una paleta fija y corta: alcanza para distinguir varios hijos sin repetir
 // colores demasiado seguido, y es más clara que generar colores al azar.
-private val markerColors = listOf(
-    Color(0xFF2E7D32), Color(0xFF1565C0), Color(0xFFEF6C00),
-    Color(0xFF6A1B9A), Color(0xFFC62828), Color(0xFF00838F),
-)
+private val markerColors = MemberColors
 
 // Si el recorrido del día tiene muchísimos puntos (por GPS ruidoso o un día
 // muy largo), lo recortamos a esta cantidad para que la animación no tarde
@@ -110,7 +116,19 @@ private fun formatHora(recordedAt: String): String = runCatching {
 fun MapScreen(prefs: Prefs) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var children by remember { mutableStateOf<Map<String, ChildMapState>>(emptyMap()) }
+    val latestState by LatestRepository.state.collectAsState()
+    // Los marcadores salen de la lista compartida: un único origen de datos, con el nombre real de cada hijo/a.
+    val children: Map<String, ChildMapState> = remember(latestState.children) {
+        latestState.children
+            .filter { it.location != null }
+            .associate { c ->
+                c.childDeviceId to ChildMapState(
+                    c.childDeviceId, c.childName, LatLng(c.location!!.lat, c.location.lng),
+                    c.location.speedMs, c.location.activityType, c.batteryLevel, c.lastSeenAt,
+                )
+            }
+    }
+    val childrenWithoutLocation = latestState.children.filter { it.location == null }
     // Satélite por defecto: se ve mucho mejor para ubicar a alguien en el
     // momento que el mapa de calles genérico.
     var satelliteOn by remember { mutableStateOf(true) }
@@ -141,33 +159,17 @@ fun MapScreen(prefs: Prefs) {
     var loadingDailySummary by remember { mutableStateOf(false) }
 
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(0.0, 0.0), 2f)
+        // Vista inicial razonable (región del Río de la Plata) mientras no hay ubicaciones:
+        // antes arrancaba en el centro del planeta y parecía que el mapa estaba roto.
+        position = CameraPosition.fromLatLngZoom(LatLng(-34.6, -58.4), 4f)
     }
 
     LaunchedEffect(Unit) {
-        val api = ApiClient.create(prefs)
-        val latest = runCatching { api.getLatestLocations() }.getOrNull()?.body()
-        latest?.let { response ->
-            children = response.children
-                .filter { it.location != null }
-                .associate { c ->
-                    c.childDeviceId to ChildMapState(
-                        c.childDeviceId, c.childName, LatLng(c.location!!.lat, c.location.lng),
-                        c.location.speedMs, c.location.activityType, c.batteryLevel, c.lastSeenAt,
-                    )
-                }
-        }
+        LatestRepository.refresh(prefs)
 
-        SocketManager.onLocationUpdate { json ->
-            val id = json.optString("childDeviceId")
-            val lat = json.optDouble("lat")
-            val lng = json.optDouble("lng")
-            val speed = if (json.has("speedMs") && !json.isNull("speedMs")) json.optDouble("speedMs").toFloat() else null
-            val activityType = if (json.has("activityType") && !json.isNull("activityType")) json.optString("activityType") else null
-            val battery = if (json.has("batteryLevel") && !json.isNull("batteryLevel")) json.optInt("batteryLevel") else null
-            val existing = children[id]
-            children = children + (id to ChildMapState(id, existing?.name ?: id, LatLng(lat, lng), speed, activityType, battery, existing?.lastSeenAt))
-        }
+        // La actualización en vivo se aplica a la lista compartida, con el nombre real (antes, si llegaba
+        // antes que la lista, el marcador mostraba el id interno en lugar del nombre).
+        SocketManager.onLocationUpdate { json -> LatestRepository.applyLive(json) }
     }
 
     // Trae el recorrido del día cuando el padre elige "Ver recorrido de hoy"
@@ -247,7 +249,10 @@ fun MapScreen(prefs: Prefs) {
                     ),
                     onClick = { selectedForDirections = child; true },
                 ) {
-                    ChildMarkerBubble(name = child.name, color = color)
+                    ChildMarkerBubble(
+                        name = child.name + staleSuffix(child.lastSeenAt),
+                        color = if (TimeAgo.freshness(child.lastSeenAt) == TimeAgo.Freshness.Stale) Color.Gray else color,
+                    )
                 }
             }
 
@@ -280,11 +285,29 @@ fun MapScreen(prefs: Prefs) {
             modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
         ) { Icon(Icons.Filled.Layers, contentDescription = "Cambiar tipo de mapa") }
 
+        // Estado de la carga arriba del mapa, sin tapar el botón de capas (a la derecha).
+        Column(Modifier.align(Alignment.TopStart).fillMaxWidth(0.8f).padding(12.dp)) {
+            ConnectionBanner(latestState, Modifier.clip(RoundedCornerShape(16.dp))) { LatestRepository.refresh(prefs) }
+            if (childrenWithoutLocation.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 3.dp, shadowElevation = 2.dp) {
+                    Text(
+                        "Sin ubicación todavía: " + childrenWithoutLocation.joinToString(", ") { it.childName },
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+            }
+        }
         if (children.isEmpty()) {
-            Text(
-                "Todavía no hay ubicaciones para mostrar.",
-                modifier = Modifier.align(Alignment.Center).padding(24.dp),
-            )
+            when (latestState.phase) {
+                LatestRepository.Phase.Ready -> Text(
+                    "Todavía no hay ubicaciones para mostrar.",
+                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                )
+                LatestRepository.Phase.Error -> Unit // el aviso de arriba ya lo explica
+                else -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            }
         }
 
         val playbackChild = children[playbackChildId]

@@ -44,6 +44,21 @@ class LocationFallbackWorker(
         // acá: igual mandamos nuestro propio ping de respaldo más abajo).
         runCatching { LocationTrackingService.start(context) }
 
+        // Latido: antes que nada, y sin depender del GPS, se avisa "la app está viva" con el
+        // estado del teléfono. Así el padre distingue "app activa pero sin ubicación" de
+        // "app detenida", y se entera si el fabricante restringió la batería. También se
+        // aprovecha para vaciar la bandeja de ubicaciones que no pudieron salir.
+        val heartbeatApi = ApiClient.create(prefs)
+        runCatching {
+            heartbeatApi.sendHeartbeat(
+                com.familyguard.child.network.HeartbeatRequest(
+                    com.familyguard.child.health.HealthSnapshot.batteryLevel(context),
+                    com.familyguard.child.health.HealthSnapshot.collect(context),
+                )
+            )
+        }
+        runCatching { com.familyguard.child.data.PingOutbox.flush(context, heartbeatApi) }
+
         // Si el servicio en primer plano no llegó a levantar (Android 12+
         // puede rechazarlo desde segundo plano en algunos estados), al
         // menos probamos reconectar el canal de "hacer sonar" directamente
@@ -73,14 +88,18 @@ class LocationFallbackWorker(
         }.getOrNull() ?: return Result.retry()
 
         val speed = if (location.hasSpeed()) location.speed else null
-        val api = ApiClient.create(prefs)
-        return runCatching {
-            api.sendLocationPing(
-                LocationPingRequest(
-                    location.latitude, location.longitude, location.accuracy, speed,
-                    batteryLevel = null, activityType = com.familyguard.child.movement.MovementState.current,
-                )
+        // Antes mandaba batteryLevel = null (el padre veía una batería vieja) y, si fallaba, se
+        // perdía. Ahora lleva la batería real y, si no llega, queda en la bandeja de salida.
+        com.familyguard.child.data.PingSender.send(
+            context, prefs,
+            LocationPingRequest(
+                location.latitude, location.longitude, location.accuracy, speed,
+                batteryLevel = com.familyguard.child.health.HealthSnapshot.batteryLevel(context),
+                activityType = com.familyguard.child.movement.MovementState.current,
+                recordedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString(),
+                health = com.familyguard.child.health.HealthSnapshot.collect(context),
             )
-        }.fold(onSuccess = { Result.success() }, onFailure = { Result.retry() })
+        )
+        return Result.success()
     }
 }

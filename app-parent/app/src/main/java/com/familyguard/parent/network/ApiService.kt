@@ -54,6 +54,31 @@ interface ApiService {
     @DELETE("sos/{id}")
     suspend fun deleteSosAlert(@Path("id") id: String): Response<Unit>
 
+    @GET("tasks")
+    suspend fun getTasks(@Query("childDeviceId") childDeviceId: String? = null): Response<TasksResponse>
+
+    @POST("tasks")
+    suspend fun createTask(@Body body: CreateTaskRequest): Response<TaskDto>
+
+    @GET("tasks/{id}/photo")
+    suspend fun getTaskPhoto(@Path("id") id: String): Response<TaskPhotoResponse>
+
+    @POST("tasks/{id}/confirm")
+    suspend fun confirmTask(@Path("id") id: String): Response<ConfirmTaskResponse>
+
+    @POST("tasks/{id}/reject")
+    suspend fun rejectTask(@Path("id") id: String): Response<TaskDto>
+
+    @DELETE("tasks/{id}")
+    suspend fun deleteTask(@Path("id") id: String): Response<Unit>
+
+    @GET("feed")
+    suspend fun getFeed(): Response<FeedResponse>
+
+    /** Renueva la sesión mientras el token todavía es válido, así no vence si se usa la app seguido. */
+    @POST("auth/refresh")
+    suspend fun refreshSession(): Response<AuthResponse>
+
     @POST("push/register")
     suspend fun registerPushToken(@Body body: RegisterPushTokenRequest): Response<Unit>
 

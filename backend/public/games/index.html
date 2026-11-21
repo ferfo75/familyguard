@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Juegos en familia</title>
+<style>
+  :root {
+    --terracotta:#C2562B; --terracotta-soft:#F6D9CB; --moss:#3D7A4A; --moss-soft:#D7EBD9;
+    --honey:#B8791A; --honey-soft:#FBE6BF; --brick:#B3261E; --cream:#F7F1E8; --cocoa:#33261C;
+    --card:#FFFDF9; --line:#E3D6C5; --muted:#7A6A5C; --on-honey:#6a4500; --on-moss:#14341D; --err-bg:#F9DEDC; --err-fg:#7a1a14;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --cream:#1E1814; --cocoa:#F4EBE0; --card:#2A221C; --line:#43372D; --muted:#B9A893;
+      --terracotta-soft:#4a2616; --moss-soft:#24402b; --honey-soft:#4a3410; --on-honey:#FBE6BF; --on-moss:#D7EBD9; --err-bg:#5a1f1b; --err-fg:#FBD5D1; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--cream); color:var(--cocoa);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior:none; }
+  h1,h2,h3 { font-family: Georgia, "Times New Roman", serif; margin:0; }
+  #app { max-width:560px; margin:0 auto; padding:14px 14px calc(18px + env(safe-area-inset-bottom)); min-height:100%; display:flex; flex-direction:column; gap:12px; }
+  .banner { padding:8px 12px; border-radius:12px; font-size:13px; text-align:center; background:var(--honey-soft); color:var(--on-honey); }
+  .banner.err { background:var(--err-bg); color:var(--err-fg); }
+  .card-box { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:14px; }
+  .row { display:flex; gap:10px; align-items:center; }
+  .grow { flex:1; }
+  button { font:inherit; border:0; border-radius:999px; padding:12px 16px; font-weight:600; cursor:pointer; color:#fff; background:var(--terracotta); }
+  button.sec { background:transparent; color:var(--cocoa); border:1.5px solid var(--line); }
+  button.moss { background:var(--moss); } button.honey { background:var(--honey); } button.brick { background:var(--brick); }
+  button:disabled { opacity:.45; }
+  .big { font-size:17px; padding:16px 18px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .pill { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; background:var(--moss-soft); color:var(--on-moss); }
+  .seat { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid var(--line); }
+  .seat:first-child { border-top:0; }
+  .dot { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-weight:700; color:#fff; background:var(--terracotta); }
+  /* ---- Truco ---- */
+  .score { display:flex; gap:8px; }
+  .score > div { flex:1; border-radius:16px; padding:8px 12px; background:var(--card); border:1px solid var(--line); }
+  .score b { font-size:26px; font-family:Georgia,serif; } .score .me { border-color:var(--terracotta); }
+  .bar { height:6px; background:var(--line); border-radius:6px; overflow:hidden; margin-top:4px; } .bar i { display:block; height:100%; background:var(--terracotta); }
+  .felt { background:var(--moss); background:linear-gradient(160deg,#3D7A4A,#2f5f3a); border-radius:24px; padding:12px; color:#fff; min-height:230px; display:flex; flex-direction:column; gap:10px; }
+  .opps { display:flex; justify-content:space-around; gap:6px; }
+  .opp { text-align:center; font-size:12px; opacity:.95; } .opp.turn { font-weight:800; text-decoration:underline; }
+  .backs { display:flex; gap:3px; justify-content:center; margin-top:4px; }
+  .back { width:22px; height:32px; border-radius:5px; background:repeating-linear-gradient(45deg,#C2562B,#C2562B 4px,#a8461f 4px,#a8461f 8px); border:1.5px solid #fff; }
+  .table { flex:1; display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; min-height:96px; }
+  .played { text-align:center; font-size:11px; } .played .name { margin-top:2px; opacity:.9; }
+  .pend { text-align:center; font-weight:700; background:rgba(255,255,255,.18); border-radius:12px; padding:6px 10px; }
+  .tricks { display:flex; gap:6px; justify-content:center; } .trick { width:14px; height:14px; border-radius:50%; background:rgba(255,255,255,.3); } .trick.w { background:#fff; } .trick.l { background:#E9A58C; } .trick.t { background:#F0C560; }
+  .pc { width:64px; height:96px; border-radius:10px; background:#FFFDF9; color:#33261C; border:2px solid #E3D6C5; display:flex; flex-direction:column; justify-content:space-between; align-items:center; padding:6px 0; font-family:Georgia,serif; box-shadow:0 2px 6px rgba(0,0,0,.2); }
+  .pc .n { font-size:30px; font-weight:800; line-height:1; } .pc .s { font-size:22px; line-height:1; } .pc small { font-size:9px; letter-spacing:.5px; text-transform:uppercase; font-family:system-ui; }
+  .pc.espada { border-color:#2d4a6b; color:#2d4a6b; } .pc.basto { border-color:#4f6b2d; color:#4f6b2d; } .pc.oro { border-color:#b8791a; color:#8a5a0a; } .pc.copa { border-color:#b3261e; color:#8a1d17; }
+  .hand { display:flex; gap:10px; justify-content:center; padding:6px 0; } .hand .pc { width:84px; height:124px; } .hand .pc .n { font-size:38px; } .hand .pc .s { font-size:28px; }
+  .hand .pc.can { transform:translateY(-6px); box-shadow:0 6px 14px rgba(194,86,43,.45); border-width:3px; cursor:pointer; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  .log { font-size:12px; color:var(--muted); text-align:center; min-height:16px; }
+  .turnbar { text-align:center; font-weight:700; padding:6px; border-radius:12px; background:var(--honey-soft); color:var(--on-honey); } .turnbar.mine { background:var(--terracotta); color:#fff; }
+  /* ---- Ludo ---- */
+  svg.board { width:100%; height:auto; max-height:62vh; background:var(--card); border-radius:20px; border:1px solid var(--line); touch-action:manipulation; }
+  .die { width:64px; height:64px; border-radius:14px; background:#fff; color:#33261C; display:grid; place-items:center; font-size:44px; border:2px solid var(--line); }
+  .ludo-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  @keyframes pulse { 0%,100% { r:.34; } 50% { r:.44; } } .movable { animation:pulse .9s infinite; cursor:pointer; }
+  .winner { text-align:center; padding:18px; } .winner h2 { font-size:26px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  "use strict";
+  const params = new URLSearchParams(location.hash.slice(1));
+  let token = params.get("t") || sessionStorage.getItem("fg_games_token") || "";
+  if (params.get("t")) sessionStorage.setItem("fg_games_token", token);
+  const app = document.getElementById("app");
+  const S = { me: null, rooms: [], room: null, conn: "connecting", err: "", toastTimer: null, teamPick: 0 };
+  const ERR = {
+    already_in_room: "Ya estás en otra sala", room_not_found: "La sala ya no existe", room_full: "La sala está llena",
+    already_started: "La partida ya empezó", only_host_starts: "Solo quien creó la sala puede empezarla",
+    truco_needs_1v1_or_2v2: "El Truco se juega 1 contra 1 o 2 contra 2 (equipos parejos)", ludo_needs_2_to_4: "El Ludo necesita de 2 a 4 jugadores",
+    not_your_turn: "Todavía no es tu turno", card_not_in_hand: "Esa carta no está en tu mano", call_not_allowed: "No podés cantar eso ahora",
+    nothing_to_answer: "No hay nada para responder", game_over: "La partida terminó", not_playing: "La partida no está en curso",
+    move_first: "Primero mové una ficha", roll_first: "Primero tirá el dado", piece_not_movable: "Esa ficha no se puede mover con ese número",
+    bad_action: "Jugada inválida", server_error: "Error del servidor, probá de nuevo", bad_game: "Juego inválido",
+  };
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const SUIT = { espada: ["🗡️", "Espada"], basto: ["🪵", "Basto"], oro: ["🟡", "Oro"], copa: ["🍷", "Copa"] };
+  const CALL_LABEL = { truco: "Truco", retruco: "Retruco", valecuatro: "Vale cuatro", envido: "Envido", real: "Real envido", falta: "Falta envido" };
+  const COLORS = ["#C2562B", "#3D7A4A", "#B8791A", "#3B6EA5"];
+
+  if (!token) { app.innerHTML = '<div class="card-box"><h2>Juegos en familia</h2><p class="muted">Abrí esta pantalla desde la app FamilyGuard.</p></div>'; return; }
+
+  const socket = io({ auth: { token }, transports: ["websocket", "polling"], reconnection: true, reconnectionDelay: 800, reconnectionDelayMax: 5000 });
+  const emit = (ev, data) => new Promise((res) => {
+    let done = false;
+    const t = setTimeout(() => { if (!done) { done = true; res({ error: "server_error" }); } }, 8000);
+    socket.emit(ev, data, (r) => { if (!done) { done = true; clearTimeout(t); res(r || {}); } });
+  });
+  const toast = (m) => { S.err = m; render(); clearTimeout(S.toastTimer); S.toastTimer = setTimeout(() => { S.err = ""; render(); }, 3500); };
+  const fail = (r) => { if (r && r.error) { toast(ERR[r.error] || r.error); return true; } return false; };
+
+  async function hello() {
+    const r = await emit("game:hello");
+    if (fail(r)) return;
+    S.me = r.me; S.rooms = r.rooms || []; S.room = r.current || null; render();
+  }
+  socket.on("connect", () => { S.conn = "ok"; hello(); });
+  socket.on("disconnect", () => { S.conn = "down"; render(); });
+  socket.on("connect_error", (e) => { S.conn = (e && (e.message === "invalid_token" || e.message === "missing_token")) ? "auth" : "down"; render(); });
+  socket.on("game:lobby", (d) => { S.rooms = d.rooms || []; if (!S.room) render(); });
+  socket.on("game:state", (v) => { S.room = v && v.roomId ? v : null; render(); });
+
+  window.fgAct = {
+    create: async (type) => { fail(await emit("game:create", { type })); },
+    join: async (roomId) => { fail(await emit("game:join", { roomId, team: S.room ? undefined : undefined })); },
+    team: async (roomId, team) => { fail(await emit("game:join", { roomId, team })); },
+    leave: async () => { fail(await emit("game:leave")); },
+    start: async (roomId) => { fail(await emit("game:start", { roomId })); },
+    act: async (action) => { if (!S.room) return; fail(await emit("game:action", { roomId: S.room.roomId, action })); },
+  };
+  const A = window.fgAct;
+
+  function banner() {
+    if (S.conn === "auth") return '<div class="banner err">La sesión venció. Cerrá y volvé a abrir los juegos desde la app.</div>';
+    if (S.conn !== "ok") return '<div class="banner">Reconectando… (la partida sigue guardada)</div>';
+    return S.err ? '<div class="banner err">' + esc(S.err) + "</div>" : "";
+  }
+
+  // ---------------- Lobby ----------------
+  function lobbyHtml() {
+    const rows = S.rooms.filter((r) => r.status === "lobby").map((r) => `
+      <div class="card-box row">
+        <div class="grow"><b>${r.type === "truco" ? "🃏 Truco" : "🎲 Ludo"}</b>
+          <div class="muted">${r.seats.map((s) => esc(s.name)).join(", ")} · ${r.seats.length}/${r.max}</div></div>
+        <button class="moss" onclick="fgAct.join('${esc(r.id)}')">Unirme</button>
+      </div>`).join("");
+    const playing = S.rooms.filter((r) => r.status === "playing").length;
+    return `
+      <div><h1>Juegos en familia</h1><div class="muted">Hola, ${esc(S.me ? S.me.name : "…")} 👋 · todos juegan desde su celular</div></div>
+      <div class="card-box">
+        <h3>Crear una partida</h3>
+        <p class="muted">Después se suman los demás desde su app.</p>
+        <div class="row">
+          <button class="grow big" onclick="fgAct.create('truco')">🃏 Truco</button>
+          <button class="grow big honey" onclick="fgAct.create('ludo')">🎲 Ludo</button>
+        </div>
+      </div>
+      ${rows ? "<h3>Salas abiertas</h3>" + rows : '<div class="muted" style="text-align:center">No hay salas abiertas todavía.</div>'}
+      ${playing ? `<div class="muted" style="text-align:center">${playing} partida(s) en curso en tu familia</div>` : ""}
+      <div class="card-box muted">Truco a 30, sin flor, 1 contra 1 o 2 contra 2, con envido, real envido y falta envido.<br>Ludo de 2 a 4 jugadores.</div>`;
+  }
+
+  // ---------------- Sala de espera ----------------
+  function waitingHtml(v) {
+    const L = v.lobby; const iHost = L.host === (S.me && S.me.key);
+    const truco = L.type === "truco";
+    const seatRow = (s, i) => `<div class="seat"><div class="dot" style="background:${truco ? (s.team === 0 ? COLORS[0] : COLORS[1]) : COLORS[i % 4]}">${esc(s.name[0] || "?").toUpperCase()}</div>
+      <div class="grow"><b>${esc(s.name)}</b>${s.key === L.host ? ' <span class="pill">anfitrión</span>' : ""}${truco ? `<div class="muted">Equipo ${s.team === 0 ? "A" : "B"}</div>` : ""}</div></div>`;
+    const mySeat = L.seats.find((s) => s.key === (S.me && S.me.key));
+    return `
+      <div class="row"><h1 class="grow">${truco ? "🃏 Truco" : "🎲 Ludo"}</h1><button class="sec" onclick="fgAct.leave()">Salir</button></div>
+      <div class="card-box">${L.seats.map(seatRow).join("")}
+        <div class="muted" style="margin-top:8px">${L.seats.length}/${L.max} jugadores — esperando que se sumen…</div></div>
+      ${truco && mySeat ? `<div class="card-box"><b>Tu equipo</b><div class="row" style="margin-top:8px">
+        <button class="${mySeat.team === 0 ? "" : "sec"} grow" onclick="fgAct.team('${L.id}',0)">Equipo A</button>
+        <button class="${mySeat.team === 1 ? "" : "sec"} grow" onclick="fgAct.team('${L.id}',1)">Equipo B</button></div>
+        <div class="muted" style="margin-top:6px">1 contra 1: uno en cada equipo. 2 contra 2: dos en cada equipo.</div></div>` : ""}
+      ${iHost ? `<button class="big moss" onclick="fgAct.start('${L.id}')">▶ Empezar partida</button>` : '<div class="muted" style="text-align:center">Espera a que el anfitrión empiece.</div>'}`;
+  }
+
+  // ---------------- Truco ----------------
+  function cardHtml(c, cls = "", click = "") {
+    const [ic, nm] = SUIT[c.suit] || ["?", c.suit];
+    return `<div class="pc ${c.suit} ${cls}" ${click}><div class="n">${c.rank}</div><div class="s">${ic}</div><small>${nm}</small></div>`;
+  }
+  function trucoHtml(v) {
+    const g = v.game; const me = g.seat;
+    const rel = (s) => (s - me + g.players.length) % g.players.length;
+    const others = g.players.filter((p) => p.seat !== me).sort((a, b) => rel(a.seat) - rel(b.seat));
+    const names = (t) => g.players.filter((p) => p.team === t).map((p) => esc(p.name)).join(" y ");
+    const my = g.team, their = 1 - g.team;
+    const pct = (n) => Math.min(100, (n / g.target) * 100);
+    const myTurn = g.turn === me && !g.pending;
+    const turnName = g.players[g.turn].name;
+    let status = "";
+    if (g.winner !== null) status = "";
+    else if (g.pending) status = g.pending.mine ? "Esperando la respuesta del rival…" : "Te cantaron: " + esc(g.pending.text);
+    else status = myTurn ? "¡Es tu turno!" : "Juega " + esc(turnName);
+    const tricks = g.tricks.map((t) => `<span class="trick ${t === null ? "t" : t === g.team ? "w" : "l"}"></span>`).join("");
+    const al = g.allowed;
+    const callBtn = (c) => `<button class="${["envido", "real", "falta"].includes(c) ? "honey" : ""}" onclick="fgAct.act({t:'call',call:'${c}'})">${CALL_LABEL[c]}</button>`;
+    const respond = al.respond ? `
+      <div class="pend">${esc(g.pending.text)} — ¿qué respondés?</div>
+      <div class="actions"><button class="moss" onclick="fgAct.act({t:'respond',r:'quiero'})">✔ Quiero</button>
+      <button class="brick" onclick="fgAct.act({t:'respond',r:'noquiero'})">✖ No quiero</button></div>` : "";
+    const finished = g.winner !== null ? `
+      <div class="card-box winner"><h2>${g.winner === g.team ? "🏆 ¡Ganaron!" : "Ganaron " + names(g.winner)}</h2>
+      <p class="muted">${g.scores[my]} a ${g.scores[their]}</p><button class="big" onclick="fgAct.leave()">Volver a los juegos</button></div>` : "";
+    return `
+      <div class="row"><div class="grow muted">Mano ${g.handNo} · a ${g.target} · ${g.trucoLevel > 1 ? "apuesta: " + ["", "", "Truco", "Retruco", "Vale cuatro"][g.trucoLevel] : "sin apuesta"}</div>
+        <button class="sec" onclick="if(confirm('¿Abandonar la partida? Se termina para todos.'))fgAct.leave()">Abandonar</button></div>
+      <div class="score">
+        <div class="me"><div class="muted">Nosotros · ${names(my)}</div><b>${g.scores[my]}</b><div class="bar"><i style="width:${pct(g.scores[my])}%"></i></div></div>
+        <div><div class="muted">Ellos · ${names(their)}</div><b>${g.scores[their]}</b><div class="bar"><i style="width:${pct(g.scores[their])}%;background:var(--moss)"></i></div></div>
+      </div>
+      <div class="felt">
+        <div class="opps">${others.map((p) => `<div class="opp ${g.turn === p.seat && !g.pending ? "turn" : ""}">${esc(p.name)}${p.team === my ? " (equipo)" : ""}
+          <div class="backs">${Array.from({ length: p.cards }, () => '<span class="back"></span>').join("")}</div></div>`).join("")}</div>
+        <div class="table">${g.table.length ? g.table.map((t) => `<div class="played">${cardHtml(t.card)}<div class="name">${esc(g.players[t.seat].name)}</div></div>`).join("")
+          : (g.lastTrick.length ? g.lastTrick.map((t) => `<div class="played" style="opacity:.55">${cardHtml(t.card)}<div class="name">${esc(g.players[t.seat].name)}</div></div>`).join("") : '<span style="opacity:.7">La mesa está vacía</span>')}</div>
+        <div class="tricks">${tricks}</div>
+      </div>
+      ${g.winner === null ? `<div class="turnbar ${myTurn || al.respond ? "mine" : ""}">${al.respond ? "Te cantaron: " + esc(g.pending.text) : status}</div>` : ""}
+      <div class="log">${esc(g.events[g.events.length - 1] || "")}</div>
+      ${finished}
+      ${g.winner === null ? `<div class="hand">${g.myHand.map((c) => cardHtml(c, al.play ? "can" : "", al.play ? `onclick='fgAct.act({t:"play",card:${JSON.stringify(c)}})'` : "")).join("")}</div>` : ""}
+      ${respond}
+      ${al.play ? `<div class="actions">${al.calls.map(callBtn).join("")}<button class="sec" onclick="if(confirm('¿Irte al mazo?'))fgAct.act({t:'mazo'})">Al mazo</button></div>` : ""}
+      ${al.respond && al.calls.length ? `<div class="actions">${al.calls.map(callBtn).join("")}</div>` : ""}`;
+  }
+
+  // ---------------- Ludo ----------------
+  const TRACK = [[1,6],[2,6],[3,6],[4,6],[5,6],[6,5],[6,4],[6,3],[6,2],[6,1],[6,0],[7,0],[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[9,6],[10,6],[11,6],[12,6],[13,6],[14,6],[14,7],[14,8],[13,8],[12,8],[11,8],[10,8],[9,8],[8,9],[8,10],[8,11],[8,12],[8,13],[8,14],[7,14],[6,14],[6,13],[6,12],[6,11],[6,10],[6,9],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8],[0,7],[0,6]];
+  const HOMECOL = [[[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]], [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]], [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]], [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]]];
+  const BASES = [[[2,2],[4,2],[2,4],[4,4]], [[11,2],[13,2],[11,4],[13,4]], [[11,11],[13,11],[11,13],[13,13]], [[2,11],[4,11],[2,13],[4,13]]];
+  const SAFE = new Set([0, 13, 26, 39, 8, 21, 34, 47]);
+  const DIE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+  function pieceXY(offset, pos, i) {
+    const q = offset / 13;
+    if (pos === 0) return { x: BASES[q][i][0], y: BASES[q][i][1] };
+    if (pos <= 51) { const c = TRACK[(offset + pos - 1) % 52]; return { x: c[0] + .5, y: c[1] + .5 }; }
+    const c = HOMECOL[q][Math.min(pos - 52, 5)];
+    const j = pos === 57 ? (i - 1.5) * 0.22 : 0;
+    return { x: c[0] + .5 + j, y: c[1] + .5 + (pos === 57 ? (i % 2 ? .2 : -.2) : 0) };
+  }
+  function boardSvg(g) {
+    let s = '<svg class="board" viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg">';
+    const quad = [[0,0],[9,0],[9,9],[0,9]];
+    quad.forEach((q, i) => { s += `<rect x="${q[0]}" y="${q[1]}" width="6" height="6" rx=".6" fill="${COLORS[i]}" opacity=".22"/>`; });
+    TRACK.forEach((c, i) => {
+      const startQ = [0,13,26,39].indexOf(i);
+      s += `<rect x="${c[0]}" y="${c[1]}" width="1" height="1" fill="${startQ >= 0 ? COLORS[startQ] : "#FFFDF9"}" stroke="#C9B8A3" stroke-width=".04"/>`;
+      if (SAFE.has(i) && startQ < 0) s += `<text x="${c[0] + .5}" y="${c[1] + .74}" font-size=".7" text-anchor="middle" fill="#B8791A">★</text>`;
+    });
+    HOMECOL.forEach((col, q) => col.forEach((c, k) => { s += `<rect x="${c[0]}" y="${c[1]}" width="1" height="1" fill="${COLORS[q]}" opacity="${k === 5 ? .9 : .55}" stroke="#C9B8A3" stroke-width=".04"/>`; }));
+    BASES.forEach((b, q) => b.forEach((c) => { s += `<circle cx="${c[0]}" cy="${c[1]}" r=".42" fill="#FFFDF9" stroke="${COLORS[q]}" stroke-width=".08"/>`; }));
+    g.players.forEach((p) => {
+      p.pieces.forEach((pos, i) => {
+        const q = p.offset / 13, xy = pieceXY(p.offset, pos, i);
+        const can = g.seat === p.seat && g.movable.includes(i);
+        s += `<circle class="${can ? "movable" : ""}" cx="${xy.x}" cy="${xy.y}" r=".34" fill="${COLORS[q]}" stroke="#fff" stroke-width=".1" ${can ? `onclick="fgAct.act({t:'move',piece:${i}})"` : ""}/>`;
+        s += `<text x="${xy.x}" y="${xy.y + .12}" font-size=".34" text-anchor="middle" fill="#fff" pointer-events="none">${i + 1}</text>`;
+      });
+    });
+    return s + "</svg>";
+  }
+  function ludoHtml(v) {
+    const g = v.game; const cur = g.players[g.turn]; const mine = g.turn === g.seat;
+    const roll = g.lastRoll;
+    const done = g.winner !== null;
+    return `
+      <div class="row"><div class="grow"><h2>🎲 Ludo</h2></div><button class="sec" onclick="if(confirm('¿Abandonar la partida? Se termina para todos.'))fgAct.leave()">Abandonar</button></div>
+      <div class="ludo-top">
+        <div class="turnbar ${mine ? "mine" : ""} grow">${done ? "Terminó la partida" : (mine ? (g.allowed.roll ? "¡Tirá el dado!" : "Elegí una ficha") : "Juega " + esc(cur.name))}</div>
+        <div class="die">${roll ? DIE[roll.value] : "🎲"}</div>
+      </div>
+      ${boardSvg(g)}
+      <div class="row" style="flex-wrap:wrap">${g.players.map((p) => `<span class="pill" style="background:${COLORS[p.offset / 13]};color:#fff">${esc(p.name)} · ${p.pieces.filter((x) => x === 57).length}/4 en casa</span>`).join("")}</div>
+      ${done ? `<div class="card-box winner"><h2>🏆 Ganó ${esc(g.players[g.winner].name)}</h2><button class="big" onclick="fgAct.leave()">Volver a los juegos</button></div>`
+        : `<button class="big" ${g.allowed.roll ? "" : "disabled"} onclick="fgAct.act({t:'roll'})">🎲 Tirar el dado</button>`}
+      <div class="log">${esc(g.events[g.events.length - 1] || "")}</div>`;
+  }
+
+  function render() {
+    let body;
+    if (!S.me) body = '<div class="muted" style="text-align:center;padding:40px">Conectando…</div>';
+    else if (!S.room) body = lobbyHtml();
+    else if (S.room.status === "lobby" || !S.room.game) body = waitingHtml(S.room);
+    else body = S.room.type === "truco" ? trucoHtml(S.room) : ludoHtml(S.room);
+    app.innerHTML = banner() + body;
+  }
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import { verifySocketToken } from "./middleware/auth";
+import { db } from "./db";
+import * as games from "./games/rooms";
 
 let io: Server;
 
@@ -29,10 +31,104 @@ export function initSocket(httpServer: HttpServer) {
     if (auth.kind === "child") {
       socket.join(`child:${auth.childDeviceId}`);
     }
+    registerGameHandlers(socket);
     socket.on("disconnect", () => {});
   });
 
+  setInterval(() => games.sweep(), 10 * 60_000).unref();
   return io;
+}
+
+// ---------- Juegos familiares (Truco y Ludo) ----------
+// El servidor es el árbitro: valida cada jugada y a cada uno le manda solo SU vista.
+
+type Ack = (res: any) => void;
+
+function playerKey(auth: any): string {
+  return auth.kind === "parent" ? `p:${auth.parentId}` : `c:${auth.childDeviceId}`;
+}
+
+async function playerName(auth: any): Promise<string> {
+  try {
+    if (auth.kind === "parent") {
+      const p = await db.parent.findUnique({ where: { id: auth.parentId }, select: { name: true } });
+      return p?.name || "Mamá/Papá";
+    }
+    const c = await db.childDevice.findUnique({ where: { id: auth.childDeviceId }, select: { name: true } });
+    return c?.name || "Hijo/a";
+  } catch {
+    return auth.kind === "parent" ? "Mamá/Papá" : "Hijo/a";
+  }
+}
+
+function pushRoom(room: games.Room) {
+  for (const key of games.playerKeys(room)) io.to(`player:${key}`).emit("game:state", games.viewFor(room, key));
+}
+
+function pushLobby(familyId: string) {
+  io.to(`family:${familyId}`).emit("game:lobby", { rooms: games.roomsOfFamily(familyId).map(games.summary) });
+}
+
+function registerGameHandlers(socket: Socket) {
+  const auth = (socket.data as any).auth;
+  const familyId: string = auth.parentId;
+  const key = playerKey(auth);
+  socket.join(`player:${key}`);
+  let namePromise: Promise<string> | null = null;
+  const me = async () => ({ key, name: await (namePromise ??= playerName(auth)) });
+
+  const reply = (ack: Ack | undefined, res: any) => { if (typeof ack === "function") ack(res); };
+  const guard = (fn: (data: any, ack?: Ack) => Promise<void> | void) => async (data: any, ack?: Ack) => {
+    try { await fn(data ?? {}, ack); }
+    catch (e) { console.error("[games]", e); reply(ack, { error: "server_error" }); }
+  };
+
+  socket.on("game:hello", guard(async (_d, ack) => {
+    const mine = games.roomOf(familyId, key);
+    reply(ack, {
+      me: await me(),
+      rooms: games.roomsOfFamily(familyId).map(games.summary),
+      current: mine ? games.viewFor(mine, key) : null,
+    });
+  }));
+
+  socket.on("game:create", guard(async (d, ack) => {
+    const r = games.createRoom(familyId, d.type, await me());
+    if ("error" in r) return reply(ack, r);
+    pushRoom(r); pushLobby(familyId);
+    reply(ack, { ok: true, roomId: r.id });
+  }));
+
+  socket.on("game:join", guard(async (d, ack) => {
+    const team = d.team === 0 || d.team === 1 ? d.team : undefined;
+    const r = games.joinRoom(familyId, String(d.roomId), await me(), team);
+    if ("error" in r) return reply(ack, r);
+    pushRoom(r); pushLobby(familyId);
+    reply(ack, { ok: true, roomId: r.id });
+  }));
+
+  socket.on("game:leave", guard((_d, ack) => {
+    const { room, left } = games.leaveRoom(familyId, key);
+    io.to(`player:${key}`).emit("game:state", { roomId: null });
+    if (room) pushRoom(room);
+    if (left) pushLobby(familyId);
+    reply(ack, { ok: true });
+  }));
+
+  socket.on("game:start", guard((d, ack) => {
+    const r = games.startRoom(familyId, String(d.roomId), key);
+    if ("error" in r) return reply(ack, r);
+    pushRoom(r); pushLobby(familyId);
+    reply(ack, { ok: true });
+  }));
+
+  socket.on("game:action", guard((d, ack) => {
+    const r = games.act(familyId, String(d.roomId), key, d.action);
+    if ("error" in r) return reply(ack, r);
+    pushRoom(r.room);
+    if (r.room.status === "ended") pushLobby(familyId);
+    reply(ack, { ok: true });
+  }));
 }
 
 export function broadcastToFamily(parentId: string, event: string, payload: unknown) {

@@ -49,12 +49,63 @@ model ChildDevice {
   // de quedar mudo para siempre después del primer aviso.
   silenceAlertSentAt DateTime?
 
+  // Latido: el teléfono avisa "estoy vivo" cada ~15 min aunque no consiga GPS,
+  // así el padre distingue "app activa pero sin ubicación" de "app detenida".
+  lastHeartbeatAt DateTime?
+  // Salud del teléfono, informada por la app del hijo (null = todavía no informó).
+  healthBatteryUnrestricted Boolean? // false = el fabricante puede matar el servicio (típico en Motorola)
+  healthBackgroundLocation  Boolean? // permiso de ubicación "todo el tiempo"
+  healthLocationEnabled     Boolean? // el GPS del sistema está prendido
+  healthAppVersion          String?
+  healthAt                  DateTime?
+
   locationPings   LocationPing[]
   geofences       Geofence[]
   geofenceEvents  GeofenceEvent[]
   appUsageRecords AppUsageRecord[]
   sosAlerts       SosAlert[]
   blockedApps     BlockedApp[]
+  tasks           Task[]
+  feedEvents      FeedEvent[]
+}
+
+// Misión que el padre le asigna al hijo/a: la hace, (opcionalmente) manda una foto
+// como prueba, y el padre la aprueba. Si se repite, al aprobarla nace la siguiente.
+model Task {
+  id            String      @id @default(uuid())
+  parentId      String
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+  childDeviceId String
+  title         String
+  reward        String      @default("")
+  requiresPhoto Boolean     @default(false)
+  repeat        String      @default("none") // "none" | "weekly" | "monthly"
+  dueDate       DateTime
+  status        String      @default("open") // "open" | "waiting" (esperando aprobación) | "confirmed"
+  hasPhoto      Boolean     @default(false)
+  // JPEG/PNG chico en base64 (el teléfono lo reduce antes de mandarlo). Se pide aparte
+  // (GET /tasks/:id/photo) para que la lista no cargue imágenes de más.
+  photoBase64   String?
+  doneAt        DateTime?
+  confirmedAt   DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([childDeviceId, status])
+  @@index([parentId, status])
+}
+
+// Novedades para el padre: "llegó bien", "va en camino", "terminó una misión"…
+model FeedEvent {
+  id            String      @id @default(uuid())
+  parentId      String
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+  childDeviceId String
+  type          String // "checkin_arrived" | "checkin_on_my_way" | "task_done" | "task_confirmed"
+  title         String
+  body          String      @default("")
+  createdAt     DateTime    @default(now())
+
+  @@index([parentId, createdAt])
 }
 
 model LocationPing {

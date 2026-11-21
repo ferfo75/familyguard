@@ -13,13 +13,14 @@ android {
         applicationId = "com.familyguard.child"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.7.0"
+        versionCode = 13
+        versionName = "0.8.0"
         buildConfigField(
             "String",
             "API_BASE_URL",
             "\"${project.findProperty("FAMILYGUARD_API_BASE_URL") ?: "http://10.0.2.2:4000/"}\""
         )
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
@@ -65,4 +66,9 @@ dependencies {
     implementation("io.socket:socket.io-client:2.1.1") {
         exclude(group = "org.json", module = "json")
     }
+
+    // Pruebas que corren en el teléfono/emulador (por ejemplo, la bandeja de salida de ubicaciones).
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
 }

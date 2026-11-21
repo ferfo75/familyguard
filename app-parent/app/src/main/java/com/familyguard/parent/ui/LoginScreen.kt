@@ -22,6 +22,7 @@ fun LoginScreen(prefs: Prefs, onLoggedIn: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val expired by prefs.sessionExpired.collectAsState(initial = false)
 
     Column(
         Modifier.fillMaxSize().padding(24.dp),
@@ -31,6 +32,14 @@ fun LoginScreen(prefs: Prefs, onLoggedIn: () -> Unit) {
         Text("FamilyGuard", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(4.dp))
         Text(if (isRegisterMode) "Creá tu cuenta de padre/madre" else "Ingresá con tu cuenta")
+        if (expired) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Tu sesión venció, por eso volvés a ver esta pantalla. No se borró nada: al ingresar de nuevo vas a ver a tu familia.",
+                color = MaterialTheme.colorScheme.tertiary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
         Spacer(Modifier.height(24.dp))
 
         if (isRegisterMode) {
@@ -63,10 +72,15 @@ fun LoginScreen(prefs: Prefs, onLoggedIn: () -> Unit) {
                             prefs.saveSession(body.token, body.parent.name)
                             onLoggedIn()
                         } else {
-                            error = "Email o contraseña incorrectos."
+                            error = when (response.code()) {
+                                401 -> "Email o contraseña incorrectos."
+                                409 -> "Ese email ya tiene una cuenta. Probá ingresar."
+                                in 500..599 -> "El servidor tuvo un problema (${response.code()}). Probá de nuevo en un minuto."
+                                else -> "No pudimos ingresar (código ${response.code()})."
+                            }
                         }
                     }.onFailure {
-                        error = "No pudimos conectar con el servidor."
+                        error = "No pudimos conectar con el servidor. Si estaba dormido puede tardar hasta un minuto: probá de nuevo."
                     }
                 }
             }

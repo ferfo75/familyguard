@@ -14,6 +14,33 @@ export const locationRouter = Router();
 
 const ACTIVITY_TYPES = ["walking", "running", "bicycle", "vehicle", "still"] as const;
 
+// Estado de salud del teléfono, informado por la app del hijo en cada ping y en el latido.
+const healthSchema = z.object({
+  batteryUnrestricted: z.boolean().optional(),
+  backgroundLocation: z.boolean().optional(),
+  locationEnabled: z.boolean().optional(),
+  appVersion: z.string().max(30).optional(),
+});
+type Health = z.infer<typeof healthSchema>;
+
+function healthData(h?: Health) {
+  if (!h) return {};
+  return {
+    healthBatteryUnrestricted: h.batteryUnrestricted,
+    healthBackgroundLocation: h.backgroundLocation,
+    healthLocationEnabled: h.locationEnabled,
+    healthAppVersion: h.appVersion,
+    healthAt: new Date(),
+  };
+}
+
+// Un ping "atrasado" es uno que el teléfono guardó mientras no había señal (o el
+// servidor dormía) y manda ahora, con la hora real en que se tomó. Se acepta hasta
+// 48 h hacia atrás; no se acepta del futuro (con 2 min de tolerancia por el reloj).
+const MAX_BACKFILL_MS = 48 * 3600 * 1000;
+const CLOCK_SKEW_MS = 2 * 60 * 1000;
+const LIVE_WINDOW_MS = 3 * 60 * 1000;
+
 const pingSchema = z.object({
   lat: z.number(),
   lng: z.number(),
@@ -21,6 +48,13 @@ const pingSchema = z.object({
   speedMs: z.number().min(0).optional(),
   batteryLevel: z.number().int().min(0).max(100).optional(),
   activityType: z.enum(ACTIVITY_TYPES).optional(),
+  recordedAt: z.string().datetime().optional(),
+  health: healthSchema.optional(),
+});
+
+const heartbeatSchema = z.object({
+  batteryLevel: z.number().int().min(0).max(100).optional(),
+  health: healthSchema.optional(),
 });
 
 // La app del hijo llama esto periódicamente (vía foreground service) con su
@@ -30,7 +64,40 @@ const pingSchema = z.object({
 locationRouter.post("/ping", requireChildAuth, async (req, res) => {
   const parsed = pingSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
-  const { lat, lng, accuracyM, speedMs, batteryLevel, activityType } = parsed.data;
+  const { lat, lng, accuracyM, speedMs, batteryLevel, activityType, health } = parsed.data;
+
+  const nowMs = Date.now();
+  let recordedAt = new Date(nowMs);
+  if (parsed.data.recordedAt) {
+    const t = Date.parse(parsed.data.recordedAt);
+    // Demasiado viejo: no se guarda (no tiene sentido como ubicación ni como "ahora").
+    if (Number.isFinite(t) && t < nowMs - MAX_BACKFILL_MS) {
+      return res.status(200).json({ ok: true, ignored: "too_old" });
+    }
+    // Un reloj del teléfono apenas adelantado se trata como "ahora"; si no, se respeta la hora real.
+    if (Number.isFinite(t)) recordedAt = new Date(Math.min(t, nowMs));
+  }
+
+  // Ping atrasado: solo se guarda en el historial. No mueve el marcador del padre, no
+  // dispara geocercas ni avisos (serían avisos viejos como si fueran de ahora). Si ya
+  // existe uno con esa misma hora se ignora, porque el teléfono puede reintentar un
+  // envío que en realidad sí había llegado.
+  if (nowMs - recordedAt.getTime() > LIVE_WINDOW_MS) {
+    const existing = await db.locationPing.findFirst({
+      where: { childDeviceId: req.childDeviceId!, recordedAt },
+      select: { id: true },
+    });
+    if (!existing) {
+      await db.locationPing.create({
+        data: { childDeviceId: req.childDeviceId!, lat, lng, accuracyM, speedMs, activityType, recordedAt },
+      });
+    }
+    await db.childDevice.update({
+      where: { id: req.childDeviceId! },
+      data: { lastSeenAt: new Date(), batteryLevel, silenceAlertSentAt: null, ...healthData(health) },
+    });
+    return res.status(201).json({ ok: true, backfilled: true });
+  }
 
   // Se piden ANTES de guardar el ping nuevo: son el estado "antes de este
   // mensaje", lo que hace falta para detectar un cruce (batería que recién
@@ -49,7 +116,7 @@ locationRouter.post("/ping", requireChildAuth, async (req, res) => {
     // silenceAlertSentAt se limpia acá: si antes se avisó "dejó de
     // reportar" y ahora volvió a mandar un ping, el próximo silencio tiene
     // que poder avisar de nuevo en vez de quedar apagado para siempre.
-    data: { lastSeenAt: new Date(), batteryLevel, silenceAlertSentAt: null },
+    data: { lastSeenAt: new Date(), batteryLevel, silenceAlertSentAt: null, ...healthData(health) },
   });
 
   broadcastToFamily(req.parentId!, "location:update", {
@@ -72,6 +139,19 @@ locationRouter.post("/ping", requireChildAuth, async (req, res) => {
   ]);
 
   res.status(201).json({ ok: true });
+});
+
+// Latido: la app del hijo avisa "estoy viva" cada ~15 min aunque no consiga GPS. No toca
+// lastSeenAt (que significa "último ping de ubicación"): así el padre puede ver "la app
+// está activa pero no manda ubicación" en vez de confundirlo con "app detenida".
+locationRouter.post("/heartbeat", requireChildAuth, async (req, res) => {
+  const parsed = heartbeatSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  await db.childDevice.update({
+    where: { id: req.childDeviceId! },
+    data: { lastHeartbeatAt: new Date(), batteryLevel: parsed.data.batteryLevel, ...healthData(parsed.data.health) },
+  });
+  res.json({ ok: true });
 });
 
 // Avisa una sola vez por "cruce": cuando la batería pasa de estar por
@@ -140,6 +220,16 @@ locationRouter.get("/latest", requireParentAuth, async (req, res) => {
         childName: child.name,
         batteryLevel: child.batteryLevel,
         lastSeenAt: child.lastSeenAt,
+        lastHeartbeatAt: child.lastHeartbeatAt,
+        health: child.healthAt
+          ? {
+              batteryUnrestricted: child.healthBatteryUnrestricted,
+              backgroundLocation: child.healthBackgroundLocation,
+              locationEnabled: child.healthLocationEnabled,
+              appVersion: child.healthAppVersion,
+              at: child.healthAt,
+            }
+          : null,
         location: ping
           ? { lat: ping.lat, lng: ping.lng, speedMs: ping.speedMs, activityType: ping.activityType, recordedAt: ping.recordedAt }
           : null,

@@ -12,7 +12,38 @@ data class LocationPingRequest(
     // "walking" | "running" | "bicycle" | "vehicle" | "still", o null si no
     // hay una detección reciente con confianza suficiente.
     val activityType: String? = null,
+    // Hora real en que se tomó el punto (ISO-8601 UTC). Con esto un ping que no se pudo
+    // mandar (sin señal, servidor dormido) se reenvía después y el recorrido no se pierde.
+    val recordedAt: String? = null,
+    val health: HealthDto? = null,
 )
+
+/** Estado del teléfono que le sirve al padre para saber POR QUÉ dejaría de reportar. */
+data class HealthDto(
+    val batteryUnrestricted: Boolean,
+    val backgroundLocation: Boolean,
+    val locationEnabled: Boolean,
+    val appVersion: String,
+)
+
+data class HeartbeatRequest(val batteryLevel: Int?, val health: HealthDto?)
+
+/** Misión asignada por el padre. status: "open" | "waiting" (esperando que la revisen) | "confirmed". */
+data class TaskDto(
+    val id: String,
+    val title: String,
+    val reward: String,
+    val requiresPhoto: Boolean,
+    val repeat: String,
+    val dueDate: String,
+    val status: String,
+    val hasPhoto: Boolean,
+)
+data class TasksResponse(val tasks: List<TaskDto>)
+data class DoneTaskRequest(val photoBase64: String?)
+
+/** kind: "arrived" (llegué bien) | "on_my_way" (voy en camino, con etaMinutes obligatorio). */
+data class CheckinRequest(val kind: String, val etaMinutes: Int?, val note: String?)
 
 data class SosRequest(
     val lat: Double,

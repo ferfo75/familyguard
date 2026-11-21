@@ -25,7 +25,7 @@ declare global {
 
 export function signParentToken(parentId: string): string {
   return jwt.sign({ kind: "parent", parentId } as ParentTokenPayload, JWT_SECRET, {
-    expiresIn: "30d",
+    expiresIn: "90d",
   });
 }
 

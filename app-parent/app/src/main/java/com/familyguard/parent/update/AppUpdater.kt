@@ -25,16 +25,32 @@ object AppUpdater {
         }.getOrNull()
     }
 
-    suspend fun downloadAndInstall(context: Context, info: AppVersionInfo) = withContext(Dispatchers.IO) {
+    /**
+     * Descarga el APK y abre el instalador de Android.
+     * @return false si no se pudo descargar (sin red, servidor dormido, archivo cortado), para avisarle
+     *         al usuario en vez de quedarse mudo como antes.
+     */
+    suspend fun downloadAndInstall(context: Context, info: AppVersionInfo): Boolean = withContext(Dispatchers.IO) {
         val baseUrl = BuildConfig.API_BASE_URL.removeSuffix("/")
         val fullUrl = if (info.downloadUrl.startsWith("http")) info.downloadUrl else "$baseUrl${info.downloadUrl}"
 
         val file = File(context.cacheDir, "update.apk")
-        runCatching {
-            URL(fullUrl).openStream().use { input ->
-                file.outputStream().use { output -> input.copyTo(output) }
+        val part = File(context.cacheDir, "update.apk.part")
+        val ok = runCatching {
+            // Render free puede tardar ~50 s en despertar: timeouts generosos, pero con tope.
+            val conn = (URL(fullUrl).openConnection() as java.net.HttpURLConnection).apply {
+                connectTimeout = 60_000
+                readTimeout = 60_000
             }
-        }.onFailure { return@withContext }
+            if (conn.responseCode != 200) error("http ${conn.responseCode}")
+            conn.inputStream.use { input -> part.outputStream().use { output -> input.copyTo(output) } }
+            val expected = conn.contentLengthLong
+            // Un APK real pesa varios MB; y si el servidor dijo cuánto pesaba, tiene que coincidir.
+            if (part.length() < 1_000_000L || (expected > 0 && part.length() != expected)) error("archivo incompleto")
+            file.delete()
+            if (!part.renameTo(file)) error("no se pudo guardar")
+        }.isSuccess
+        if (!ok) { part.delete(); return@withContext false }
 
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -45,5 +61,6 @@ object AppUpdater {
         withContext(Dispatchers.Main) {
             runCatching { context.startActivity(intent) }
         }
+        true
     }
 }

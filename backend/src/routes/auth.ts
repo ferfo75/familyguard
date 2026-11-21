@@ -43,6 +43,14 @@ authRouter.post("/login", async (req, res) => {
   res.json({ token: signParentToken(parent.id), parent: { id: parent.id, email: parent.email, name: parent.name } });
 });
 
+// Sesión deslizante: mientras el token siga siendo válido se puede cambiar por uno nuevo,
+// así que quien usa la app seguido no vuelve a ver el login. Un token vencido da 401.
+authRouter.post("/refresh", requireParentAuth, async (req, res) => {
+  const parent = await db.parent.findUnique({ where: { id: req.parentId! } });
+  if (!parent) return res.status(401).json({ error: "invalid_token" });
+  res.json({ token: signParentToken(parent.id), parent: { id: parent.id, email: parent.email, name: parent.name } });
+});
+
 // --- Emparejamiento padre <-> hijo -----------------------------------------
 
 function randomSixDigitCode(): string {

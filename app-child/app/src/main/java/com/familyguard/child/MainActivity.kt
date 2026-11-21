@@ -25,7 +25,15 @@ import androidx.work.WorkManager
 import com.familyguard.child.battery.BatteryOptimization
 import com.familyguard.child.data.Prefs
 import com.familyguard.child.network.ApiClient
+import com.familyguard.child.network.DoneTaskRequest
 import com.familyguard.child.network.RedeemPairingRequest
+import com.familyguard.child.ui.ChildHome
+import com.familyguard.child.util.PhotoUtil
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import com.familyguard.child.service.LocationTrackingService
 import com.familyguard.child.ui.theme.FamilyGuardChildTheme
 import com.familyguard.child.worker.LocationFallbackWorker
@@ -37,6 +45,66 @@ class MainActivity : ComponentActivity() {
 
     private val prefs by lazy { Prefs(applicationContext) }
 
+    // ---- Fotos de las misiones ----------------------------------------------------------
+    private var tasksTick by mutableIntStateOf(0)
+    private var uploadingTaskId by mutableStateOf<String?>(null)
+    private var photoBanner by mutableStateOf<String?>(null)
+    private var photoTaskId: String? = null
+    private var cameraUri: Uri? = null
+
+    private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) uploadPhoto(uri)
+    }
+    private val takePicture = registerForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        if (saved) cameraUri?.let { uploadPhoto(it) }
+    }
+
+    private fun startCamera(taskId: String) {
+        photoTaskId = taskId
+        photoBanner = null
+        val dir = File(cacheDir, "photos").apply { mkdirs() }
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", File(dir, "tarea-${System.currentTimeMillis()}.jpg"))
+        cameraUri = uri
+        runCatching { takePicture.launch(uri) }.onFailure { photoBanner = "No se pudo abrir la cámara. Probá con la galería." }
+    }
+
+    private fun startGallery(taskId: String) {
+        photoTaskId = taskId
+        photoBanner = null
+        runCatching { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+            .onFailure { photoBanner = "No se pudo abrir la galería." }
+    }
+
+    /** Reduce la foto y la manda. Si falla, la misión sigue pendiente y se puede reintentar: no se pierde nada. */
+    private fun uploadPhoto(uri: Uri) {
+        val taskId = photoTaskId ?: return
+        uploadingTaskId = taskId
+        photoBanner = null
+        lifecycleScope.launch {
+            val encoded = withContext(Dispatchers.Default) { PhotoUtil.encodeToBase64Jpeg(applicationContext, uri) }
+            if (encoded == null) {
+                photoBanner = "No se pudo leer esa foto. Probá con otra."
+                uploadingTaskId = null
+                return@launch
+            }
+            val response = runCatching { ApiClient.create(prefs).markTaskDone(taskId, DoneTaskRequest(encoded)) }.getOrNull()
+            uploadingTaskId = null
+            if (response != null && response.isSuccessful) {
+                photoBanner = "¡Listo! Tu familia va a revisar la foto."
+                runCatching { File(cacheDir, "photos").listFiles()?.forEach { it.delete() } } // ya no hace falta
+                tasksTick++
+            } else {
+                photoBanner = when {
+                    response == null -> "No hay conexión. Probá de nuevo en un momento."
+                    response.code() == 400 -> "Esa foto no sirve. Probá con otra."
+                    response.code() == 409 -> "Esta misión ya se había enviado."
+                    else -> "No se pudo enviar (código ${response.code()}). Probá de nuevo."
+                }
+                if (response?.code() == 409) tasksTick++
+            }
+        }
+    }
+
     private val requestLocationPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { onLocationPermissionsResult() }
@@ -45,7 +113,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             FamilyGuardChildTheme {
-                val isPaired by prefs.isPaired.collectAsState(initial = false)
+                // null = todavía leyendo el almacenamiento. Antes arrancaba en "no emparejado" y por un
+                // instante mostraba la pantalla de emparejar a quien ya estaba emparejado.
+                val isPaired by prefs.isPaired.collectAsState<Boolean, Boolean?>(initial = null)
                 val childName by prefs.childNameFlow.collectAsState(initial = null)
                 // Se recalcula cada vez que la Activity vuelve a primer plano (por
                 // ejemplo, al volver de Ajustes), para saber si ya se cumplieron
@@ -63,10 +133,25 @@ class MainActivity : ComponentActivity() {
                 var downloading by remember { mutableStateOf(false) }
 
                 Surface(Modifier.fillMaxSize()) {
-                    if (isPaired) {
+                    if (isPaired == null) {
+                        // Cargando: pantalla en blanco unos milisegundos, sin mostrar nada que confunda.
+                    } else if (isPaired == true) {
                         val setupComplete = remember(recheckTick) { isMandatorySetupComplete() }
                         if (setupComplete) {
-                            PairedScreen(childName ?: "")
+                            ChildHome(
+                                prefs = prefs,
+                                childName = childName ?: "",
+                                resumeTick = recheckTick,
+                                tasksTick = tasksTick,
+                                uploadingTaskId = uploadingTaskId,
+                                banner = photoBanner,
+                                onSos = { startActivity(Intent(this@MainActivity, com.familyguard.child.sos.SosActivity::class.java)) },
+                                onTakePhoto = { startCamera(it) },
+                                onPickPhoto = { startGallery(it) },
+                                onFixSettings = {
+                                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                                },
+                            )
                             LaunchedEffect(Unit) {
                                 onAlreadyPaired()
                                 updateInfo = com.familyguard.child.update.AppUpdater.checkForUpdate(prefs)
@@ -82,8 +167,9 @@ class MainActivity : ComponentActivity() {
                                             onClick = {
                                                 downloading = true
                                                 lifecycleScope.launch {
-                                                    com.familyguard.child.update.AppUpdater.downloadAndInstall(this@MainActivity, info)
+                                                    val ok = com.familyguard.child.update.AppUpdater.downloadAndInstall(this@MainActivity, info)
                                                     downloading = false
+                                                    if (!ok) android.widget.Toast.makeText(this@MainActivity, "No se pudo descargar la actualización. Revisá la conexión y probá de nuevo.", android.widget.Toast.LENGTH_LONG).show()
                                                 }
                                             }
                                         ) { Text(if (downloading) "Descargando…" else "Actualizar") }
@@ -110,7 +196,11 @@ class MainActivity : ComponentActivity() {
     // listo" — se vuelve a chequear cada vez que la app vuelve a primer
     // plano, así que no hay forma de avanzar sin resolverlo de verdad.
     private fun isMandatorySetupComplete(): Boolean {
+        // El permiso "todo el tiempo" es obligatorio: sin él, Android 12+ puede negarse a
+        // reiniciar el servicio de ubicación desde segundo plano, que es justo lo que hace el
+        // respaldo cuando el fabricante lo mata. Antes solo se pedía, pero se podía seguir sin él.
         return hasForegroundLocationPermission() &&
+            hasBackgroundLocationPermission() &&
             BatteryOptimization.isIgnoringBatteryOptimizations(this) &&
             isGpsEnabled()
     }
@@ -135,6 +225,17 @@ class MainActivity : ComponentActivity() {
             )
             Spacer(Modifier.height(16.dp))
             SetupStepRow(
+                done = hasBackgroundLocationPermission(),
+                title = "Ubicación “todo el tiempo”",
+                buttonLabel = "Otorgar",
+                onClick = {
+                    // En Android 11+ esto abre la pantalla de permisos de la app: ahí hay que
+                    // elegir "Permitir todo el tiempo".
+                    requestLocationPermissions.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+                },
+            )
+            Spacer(Modifier.height(16.dp))
+            SetupStepRow(
                 done = isGpsEnabled(),
                 title = "GPS / ubicación del sistema activada",
                 buttonLabel = "Activar",
@@ -155,7 +256,7 @@ class MainActivity : ComponentActivity() {
 
             Spacer(Modifier.height(24.dp))
             Text(
-                "Si ya hiciste los tres pasos y sigue sin avanzar, volvé a esta " +
+                "Si ya hiciste todos los pasos y sigue sin avanzar, volvé a esta " +
                     "pantalla — se actualiza sola al volver de Ajustes.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -290,6 +391,10 @@ class MainActivity : ComponentActivity() {
     private fun hasForegroundLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
+    private fun hasBackgroundLocationPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
+
     // Para cuando llegamos acá, ubicación/GPS/batería ya están resueltos
     // (MandatorySetupScreen no deja pasar si no), así que esto solo arranca
     // el servicio y deja pendiente el único paso no-crítico (acceso a datos
@@ -320,8 +425,27 @@ class MainActivity : ComponentActivity() {
     // El permiso de "Acceso a datos de uso" y la activación del servicio de
     // Accesibilidad no se pueden pedir con un diálogo del sistema: hay que
     // llevar al usuario a la pantalla de Ajustes correspondiente.
+    private fun hasUsageAccess(): Boolean {
+        val appOps = getSystemService(APP_OPS_SERVICE) as android.app.AppOpsManager
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
+        }
+        return mode == android.app.AppOpsManager.MODE_ALLOWED
+    }
+
+    // Antes esta función no comprobaba nada: cada vez que el chico abría la app lo mandaba a
+    // Ajustes, aunque el permiso ya estuviera dado. Ahora solo lo pide si falta y, como mucho,
+    // una vez por día, para no secuestrar la pantalla.
     private fun promptUsageAccessIfNeeded() {
-        toast("Paso 1 de 3: activá \"Acceso a datos de uso\" para FamilyGuard")
+        if (hasUsageAccess()) return
+        val ui = getSharedPreferences("ui_prompts", MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - ui.getLong("usage_prompt_at", 0L) < 24L * 3600 * 1000) return
+        ui.edit().putLong("usage_prompt_at", now).apply()
+        toast("Activá \"Acceso a datos de uso\" para FamilyGuard (así tu familia puede ver cuánto usás cada app)")
         startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 

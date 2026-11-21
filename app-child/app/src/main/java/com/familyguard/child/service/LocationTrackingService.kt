@@ -128,12 +128,14 @@ class LocationTrackingService : Service() {
     }
 
     private suspend fun sendPing(lat: Double, lng: Double, accuracy: Float?, speedMs: Float?) {
-        val api = ApiClient.create(prefs)
-        runCatching {
-            api.sendLocationPing(
-                LocationPingRequest(lat, lng, accuracy, speedMs, readBatteryLevel(), MovementState.current)
-            )
-        }
+        // Va por PingSender: si no llega (sin señal, servidor dormido) queda guardado y se
+        // reenvía con su hora real, en vez de perderse como antes.
+        val ping = LocationPingRequest(
+            lat, lng, accuracy, speedMs, readBatteryLevel(), MovementState.current,
+            recordedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString(),
+            health = com.familyguard.child.health.HealthSnapshot.collect(applicationContext),
+        )
+        com.familyguard.child.data.PingSender.send(applicationContext, prefs, ping)
     }
 
     private fun readBatteryLevel(): Int {

@@ -16,6 +16,8 @@ import { childrenRouter } from "./routes/children";
 import { placesRouter } from "./routes/places";
 import { summaryRouter } from "./routes/summary";
 import { internalRouter } from "./routes/internal";
+import { tasksRouter } from "./routes/tasks";
+import { feedRouter, checkinsRouter } from "./routes/feed";
 import path from "path";
 
 const app = express();
@@ -31,6 +33,10 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 // no vale la pena un bucket aparte para esto.
 app.use("/apks", express.static(path.join(__dirname, "..", "public", "apks")));
 
+// Pantalla de juegos en familia (Truco y Ludo): una sola página que abren las dos apps en un WebView.
+// No lleva datos ni secretos: el token llega en el fragmento (#t=...) que el navegador nunca envía al servidor.
+app.use("/games", express.static(path.join(__dirname, "..", "public", "games"), { maxAge: 0 }));
+
 app.use("/auth", authRouter);
 app.use("/location", locationRouter);
 app.use("/location", placesRouter);
@@ -43,6 +49,9 @@ app.use("/push", pushRouter);
 app.use("/commands", commandsRouter);
 app.use("/app", appVersionRouter);
 app.use("/children", childrenRouter);
+app.use("/tasks", tasksRouter);
+app.use("/feed", feedRouter);
+app.use("/checkins", checkinsRouter);
 
 const httpServer = createServer(app);
 initSocket(httpServer);

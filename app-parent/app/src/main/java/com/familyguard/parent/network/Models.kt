@@ -15,12 +15,23 @@ data class LatestLocation(
     val activityType: String?,
     val recordedAt: String,
 )
+/** Salud del teléfono del hijo/a: lo que explica por qué dejaría de reportar. null = todavía no informó. */
+data class ChildHealth(
+    val batteryUnrestricted: Boolean?,
+    val backgroundLocation: Boolean?,
+    val locationEnabled: Boolean?,
+    val appVersion: String?,
+    val at: String?,
+)
 data class ChildLatest(
     val childDeviceId: String,
     val childName: String,
     val batteryLevel: Int?,
     val lastSeenAt: String?,
     val location: LatestLocation?,
+    // Opcionales: un servidor viejo (o una caché vieja) no los trae.
+    val lastHeartbeatAt: String? = null,
+    val health: ChildHealth? = null,
 )
 data class LatestLocationsResponse(val children: List<ChildLatest>)
 
@@ -73,6 +84,43 @@ data class SosAlert(
     val resolvedAt: String?,
 )
 data class SosAlertsResponse(val alerts: List<SosAlert>)
+
+/** Misión que el padre le asigna al hijo/a. status: "open" | "waiting" (esperando aprobación) | "confirmed". */
+data class TaskDto(
+    val id: String,
+    val childDeviceId: String,
+    val title: String,
+    val reward: String,
+    val requiresPhoto: Boolean,
+    val repeat: String, // "none" | "weekly" | "monthly"
+    val dueDate: String,
+    val status: String,
+    val hasPhoto: Boolean,
+    val doneAt: String?,
+    val confirmedAt: String?,
+)
+data class TasksResponse(val tasks: List<TaskDto>)
+data class CreateTaskRequest(
+    val childDeviceId: String,
+    val title: String,
+    val reward: String,
+    val requiresPhoto: Boolean,
+    val repeat: String,
+)
+data class TaskPhotoResponse(val photoBase64: String)
+data class ConfirmTaskResponse(val task: TaskDto, val next: TaskDto?)
+
+/** Novedad para el padre: "llegó bien", "va en camino", "terminó una misión"… */
+data class FeedEventDto(
+    val id: String,
+    val childDeviceId: String,
+    val childName: String,
+    val type: String,
+    val title: String,
+    val body: String,
+    val createdAt: String,
+)
+data class FeedResponse(val events: List<FeedEventDto>)
 
 data class RegisterPushTokenRequest(val token: String)
 

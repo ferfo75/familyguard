@@ -20,7 +20,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.familyguard.parent.data.Prefs
+import com.familyguard.parent.data.LatestRepository
+import com.familyguard.parent.network.ApiClient
+import com.familyguard.parent.network.ApiResult
 import com.familyguard.parent.network.ChildLatest
+import com.familyguard.parent.network.callWithRetry
 import com.familyguard.parent.network.SocketManager
 import com.familyguard.parent.ui.*
 import com.familyguard.parent.ui.theme.FamilyGuardParentTheme
@@ -34,6 +38,14 @@ private data class SosUi(val childName: String, val lat: Double, val lng: Double
 class MainActivity : ComponentActivity() {
 
     private val prefs by lazy { Prefs(applicationContext) }
+
+    /** Cada vez que se vuelve a la app se actualiza la lista: no hace falta "tocar en varios lados". */
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch {
+            if (prefs.tokenOrNull() != null) LatestRepository.refresh(prefs)
+        }
+    }
     /** Único hijo abierto en Uso/Zonas; se guarda acá porque NavController
      * no serializa bien objetos de red completos entre pantallas. */
     private var selectedChild: ChildLatest? = null
@@ -45,6 +57,8 @@ class MainActivity : ComponentActivity() {
                 Surface {
                     val isLoggedIn by prefs.isLoggedIn.collectAsState(initial = false)
                     val token by prefs.tokenFlow.collectAsState(initial = null)
+                    // Al cerrarse la sesión no debe quedar nada del usuario anterior en memoria.
+                    LaunchedEffect(isLoggedIn) { if (!isLoggedIn) LatestRepository.reset() }
                     var activeSos by remember { mutableStateOf<SosUi?>(null) }
                     var updateInfo by remember { mutableStateOf<com.familyguard.parent.network.AppVersionInfo?>(null) }
                     var downloadingUpdate by remember { mutableStateOf(false) }
@@ -63,6 +77,14 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             updateInfo = com.familyguard.parent.update.AppUpdater.checkForUpdate(prefs)
+
+                            // Sesión deslizante: si pasó más de un día desde la última renovación, se pide un
+                            // token nuevo. Si el servidor todavía no tiene esta ruta (404) simplemente no pasa nada.
+                            if (System.currentTimeMillis() - prefs.lastTokenRefreshAt() > 24L * 60 * 60 * 1000) {
+                                val api = ApiClient.create(prefs)
+                                val renewed = callWithRetry(attempts = 1) { api.refreshSession() }
+                                if (renewed is ApiResult.Ok) prefs.saveSession(renewed.value.token, renewed.value.parent.name)
+                            }
                         }
                     }
 
@@ -85,8 +107,9 @@ class MainActivity : ComponentActivity() {
                                     onClick = {
                                         downloadingUpdate = true
                                         lifecycleScope.launch {
-                                            com.familyguard.parent.update.AppUpdater.downloadAndInstall(this@MainActivity, info)
+                                            val ok = com.familyguard.parent.update.AppUpdater.downloadAndInstall(this@MainActivity, info)
                                             downloadingUpdate = false
+                                            if (!ok) android.widget.Toast.makeText(this@MainActivity, "No se pudo descargar la actualización. Revisá la conexión y probá de nuevo.", android.widget.Toast.LENGTH_LONG).show()
                                         }
                                     }
                                 ) { Text(if (downloadingUpdate) "Descargando…" else "Actualizar") }
@@ -148,6 +171,29 @@ class MainActivity : ComponentActivity() {
                 composable("sos") {
                     SosScreen(prefs)
                 }
+                composable("tasks") {
+                    TasksScreen(prefs)
+                }
+                composable("feed") {
+                    FeedScreen(prefs)
+                }
+                composable("games") {
+                    GamesScreen(prefs)
+                }
+                composable("more") {
+                    val latest by LatestRepository.state.collectAsState()
+                    MoreScreen(
+                        children = latest.children,
+                        onGames = { navController.navigate("games") },
+                        onZones = { navController.navigate("geofences") },
+                        onSos = { navController.navigate("sos") },
+                        onUsage = { child ->
+                            onSelectChild(child)
+                            selectedChild = child
+                            navController.navigate("usage")
+                        },
+                    )
+                }
             }
         }
     }
@@ -156,36 +202,44 @@ class MainActivity : ComponentActivity() {
     private fun BottomBar(navController: NavHostController) {
         val backStack by navController.currentBackStackEntryAsState()
         val current = backStack?.destination?.route
+        // Pestañas de primer nivel: no apilan pantallas (la de atrás vuelve a Familia y de ahí se sale).
+        fun goTab(route: String) {
+            navController.navigate(route) {
+                popUpTo("home")
+                launchSingleTop = true
+            }
+        }
         NavigationBar {
             NavigationBarItem(
                 selected = current == "home",
-                onClick = { navController.navigate("home") },
-                icon = { Icon(Icons.Filled.Home, null) },
-                label = { Text("Inicio") },
+                onClick = { goTab("home") },
+                icon = { Icon(Icons.Filled.Groups, null) },
+                label = { Text("Familia") },
             )
             NavigationBarItem(
                 selected = current == "map",
-                onClick = { navController.navigate("map") },
+                onClick = { goTab("map") },
                 icon = { Icon(Icons.Filled.Place, null) },
                 label = { Text("Mapa") },
             )
             NavigationBarItem(
-                selected = current == "geofences",
-                onClick = { navController.navigate("geofences") },
-                icon = { Icon(Icons.Filled.Shield, null) },
-                label = { Text("Zonas") },
+                selected = current == "tasks",
+                onClick = { goTab("tasks") },
+                icon = { Icon(Icons.Filled.TaskAlt, null) },
+                label = { Text("Misiones") },
             )
             NavigationBarItem(
-                selected = current == "usage",
-                onClick = { navController.navigate("usage") },
-                icon = { Icon(Icons.Filled.Timer, null) },
-                label = { Text("Uso") },
+                selected = current == "feed",
+                onClick = { goTab("feed") },
+                icon = { Icon(Icons.Filled.Notifications, null) },
+                label = { Text("Novedades") },
             )
             NavigationBarItem(
-                selected = current == "sos",
-                onClick = { navController.navigate("sos") },
-                icon = { Icon(Icons.Filled.Warning, null) },
-                label = { Text("SOS") },
+                // Zonas, Uso y SOS viven dentro de "Más".
+                selected = current in setOf("more", "games", "geofences", "usage", "sos"),
+                onClick = { goTab("more") },
+                icon = { Icon(Icons.Filled.MoreHoriz, null) },
+                label = { Text("Más") },
             )
         }
     }
