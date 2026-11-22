@@ -77,6 +77,19 @@ function pushRoom(room: games.Room) {
   for (const key of games.playerKeys(room)) io.to(`player:${key}`).emit("game:state", games.viewFor(room, key));
 }
 
+/** Si le toca a la computadora (ajedrez solo), juega después de una pausa corta para que se note. */
+function kickBot(room: games.Room) {
+  if (!games.botPending(room)) return;
+  setTimeout(async () => {
+    const r = games.getRoom(room.id);
+    if (!r || !games.botPending(r)) return;
+    try { await games.botMove(r); } catch (e) { console.error("[games] bot", e); return; }
+    pushRoom(r);
+    if (r.status === "ended") pushLobby(r.familyId);
+    kickBot(r);
+  }, 700 + Math.random() * 900);
+}
+
 function pushLobby(familyId: string) {
   io.to(`family:${familyId}`).emit("game:lobby", { rooms: games.roomsOfFamily(familyId).map(games.summary) });
 }
@@ -134,10 +147,17 @@ function registerGameHandlers(socket: Socket) {
     reply(ack, { ok: true });
   }));
 
+  socket.on("game:addbot", guard((d, ack) => {
+    const r = games.addBot(familyId, String(d.roomId), key, String(d.level ?? "normal"));
+    if ("error" in r) return reply(ack, r);
+    pushRoom(r); pushLobby(familyId); kickBot(r);
+    reply(ack, { ok: true });
+  }));
+
   socket.on("game:action", guard((d, ack) => {
     const r = games.act(familyId, String(d.roomId), key, d.action);
     if ("error" in r) return reply(ack, r);
-    pushRoom(r.room);
+    pushRoom(r.room); kickBot(r.room);
     if (r.room.status === "ended") pushLobby(familyId);
     reply(ack, { ok: true });
   }));

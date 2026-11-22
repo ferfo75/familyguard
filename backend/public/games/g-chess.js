@@ -15,7 +15,7 @@ const CSS = `
 .ch-bar{flex:none;display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:14px;background:var(--card);border:2px solid transparent}
 .ch-bar.turn{border-color:#E0A83A;box-shadow:0 0 0 3px rgba(224,168,58,.25)}
 .ch-bar .dot{width:26px;height:26px;font-size:12px}
-.ch-bar .nm{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:36%}
+.ch-bar .nm{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58%}
 .ch-bar .cap{flex:1;text-align:right;font-size:17px;letter-spacing:-2px;white-space:nowrap;overflow:hidden;color:var(--cocoa);opacity:.85}
 .ch-foot{flex:none;display:flex;align-items:center;gap:8px}
 .ch-status{flex:1;text-align:center;font-weight:800;padding:7px 8px;border-radius:12px;background:var(--honey-soft);color:var(--on-honey);font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

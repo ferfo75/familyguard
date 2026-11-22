@@ -4,6 +4,7 @@ import * as ludo from "./ludo";
 import * as chess from "./chess";
 import * as generala from "./generala";
 import * as golf from "./minigolf";
+import { chooseMove, LEVELS, LEVEL_NAME, BotLevel } from "./chessbot";
 
 /**
  * Salas de juego en memoria, una lista por familia (parentId).
@@ -26,6 +27,7 @@ export interface Room {
   status: "lobby" | "playing" | "ended";
   state: AnyState | null;
   order: string[]; // clave de jugador por asiento, una vez empezada la partida
+  botLevel?: BotLevel; // ajedrez contra la computadora
   createdAt: number;
   updatedAt: number;
 }
@@ -139,6 +141,42 @@ export function startRoom(familyId: string, roomId: string, key: string): Room |
   r.status = "playing";
   r.updatedAt = Date.now();
   return r;
+}
+
+/** Ajedrez solo: suma a la computadora como rival y arranca la partida. */
+export function addBot(familyId: string, roomId: string, key: string, level: string): Room | Err {
+  const r = rooms.get(roomId);
+  if (!r || r.familyId !== familyId) return err("room_not_found");
+  if (r.type !== "chess") return err("bot_not_available");
+  if (r.hostKey !== key) return err("only_host_starts");
+  if (r.status !== "lobby") return err("already_started");
+  if (r.seats.length !== 1) return err("room_not_empty");
+  const lv = (LEVELS as string[]).includes(level) ? (level as BotLevel) : "normal";
+  r.botLevel = lv;
+  r.seats.push({ key: `bot:${r.id}`, name: `Computadora (${LEVEL_NAME[lv]})` });
+  return startRoom(familyId, roomId, key);
+}
+
+const botKeyOf = (r: Room) => r.seats.find((s) => s.key.startsWith("bot:"))?.key ?? null;
+
+/** ¿Le toca mover a la computadora ahora? */
+export function botPending(r: Room): boolean {
+  if (r.type !== "chess" || r.status !== "playing" || !r.state || r.state.kind !== "chess" || r.state.winner !== null) return false;
+  const bk = botKeyOf(r);
+  return bk !== null && r.order.indexOf(bk) === r.state.turn;
+}
+
+/** Hace la jugada de la computadora (si le toca). */
+export async function botMove(r: Room): Promise<void> {
+  if (!botPending(r) || r.state?.kind !== "chess") return;
+  const st = r.state;
+  const seat = st.turn;
+  const mv = await chooseMove(st.game.fen(), r.botLevel ?? "normal");
+  // la sala pudo terminar o cambiar mientras pensaba
+  if (r.status !== "playing" || st.winner !== null || st.turn !== seat) return;
+  chess.apply(st, seat, { t: "move", from: mv.from, to: mv.to, promotion: mv.promotion });
+  r.updatedAt = Date.now();
+  if (st.winner !== null) r.status = "ended";
 }
 
 export function act(familyId: string, roomId: string, key: string, action: any): { room: Room } | Err {

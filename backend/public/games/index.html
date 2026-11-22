@@ -163,7 +163,7 @@
     not_your_turn: "Todavía no es tu turno", card_not_in_hand: "Esa carta no está en tu mano", call_not_allowed: "No podés cantar eso ahora",
     nothing_to_answer: "No hay nada para responder", game_over: "La partida terminó", not_playing: "La partida no está en curso",
     move_first: "Primero mové una ficha", roll_first: "Primero tirá el dado", piece_not_movable: "Esa ficha no se puede mover con ese número",
-    bad_action: "Jugada inválida", chess_needs_2: "El ajedrez se juega de a dos", illegal_move: "Esa jugada no se puede", score_first: "Anotá el resultado antes de seguir", roll_first: "Primero tirá los dados", keep_not_all: "Dejá al menos un dado para volver a tirar", category_taken: "Esa casilla ya está anotada", wait_ball: "Esperá a que la pelota deje de rodar", server_error: "Error del servidor, probá de nuevo", bad_game: "Juego inválido",
+    bad_action: "Jugada inválida", chess_needs_2: "El ajedrez se juega de a dos (o contra la computadora)", bot_not_available: "Ese juego no tiene computadora", room_not_empty: "Ya hay otro jugador en la sala", illegal_move: "Esa jugada no se puede", score_first: "Anotá el resultado antes de seguir", roll_first: "Primero tirá los dados", keep_not_all: "Dejá al menos un dado para volver a tirar", category_taken: "Esa casilla ya está anotada", wait_ball: "Esperá a que la pelota deje de rodar", server_error: "Error del servidor, probá de nuevo", bad_game: "Juego inválido",
   };
 
   // El WebView de la app le da al documento un alto de 0 aunque la ventana mida 786: ni vh, ni dvh, ni height:100% sirven ahí.
@@ -289,6 +289,7 @@
     join: async (roomId, team) => { fail(await emit("game:join", { roomId, team })); },
     leave: async () => { fail(await emit("game:leave")); },
     start: async (roomId) => { fail(await emit("game:start", { roomId })); },
+    bot: async (roomId, level) => { fail(await emit("game:addbot", { roomId, level })); },
     act: async (action) => {
       if (!S.room || S.sending) return;
       S.sending = true; setTimeout(() => { S.sending = false; }, 1200);
@@ -312,7 +313,7 @@
     mods: {},
     async get(type) {
       if (!this.mods[type]) {
-        const m = await import("./" + PLUG_FILES[type] + "?v=11");
+        const m = await import("./" + PLUG_FILES[type] + "?v=14");
         this.mods[type] = m.default(PAPI);
       }
       return this.mods[type];
@@ -338,6 +339,7 @@
     if (a === "create") A.create(el.dataset.type);
     else if (a === "join") A.join(el.dataset.id, el.dataset.team === undefined ? undefined : Number(el.dataset.team));
     else if (a === "start") A.start(el.dataset.id);
+    else if (a === "bot") A.bot(el.dataset.id, el.dataset.level);
     else if (a === "leave") A.leave();
     else if (a === "quit") { if (await ask("¿Abandonar la partida? Se termina para todos.", "Abandonar")) A.leave(); }
     else if (a === "mazo") { if (await ask("¿Irte al mazo?", "Al mazo")) A.act({ t: "mazo" }); }
@@ -385,7 +387,9 @@
         <button class="grow ${mySeat.team === 0 ? "" : "sec"}" data-a="join" data-id="${L.id}" data-team="0">Equipo A</button>
         <button class="grow ${mySeat.team === 1 ? "" : "sec"}" data-a="join" data-id="${L.id}" data-team="1">Equipo B</button></div>
         <div class="muted" style="margin-top:6px">1 contra 1: uno en cada equipo. 2 contra 2: dos en cada equipo.</div></div>` : ""}
-      ${iHost ? `<button class="big moss" data-a="start" data-id="${L.id}">▶ Empezar partida</button>` : '<div class="muted" style="text-align:center">Esperá a que el anfitrión empiece.</div>'}`);
+      ${iHost && L.type === "chess" && L.seats.length === 1 ? `<div class="box"><b>🤖 ¿Jugás solo?</b><div class="muted" style="margin:4px 0 8px">Jugá contra la computadora. Elegí qué tan fuerte.</div>
+        <div class="row"><button class="grow moss" data-a="bot" data-id="${L.id}" data-level="facil">Fácil</button><button class="grow honey" data-a="bot" data-id="${L.id}" data-level="normal">Normal</button><button class="grow brick" data-a="bot" data-id="${L.id}" data-level="dificil">Difícil</button></div></div>` : ""}
+      ${iHost ? (L.type === "chess" && L.seats.length === 1 ? '<div class="muted" style="text-align:center">…o esperá a que otro se sume desde su celular.</div>' : `<button class="big moss" data-a="start" data-id="${L.id}">▶ Empezar partida</button>`) : '<div class="muted" style="text-align:center">Esperá a que el anfitrión empiece.</div>'}`);
   }
 
   async function handleState(v) {
