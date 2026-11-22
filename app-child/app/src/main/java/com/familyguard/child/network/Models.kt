@@ -28,6 +28,9 @@ data class HealthDto(
 
 data class HeartbeatRequest(val batteryLevel: Int?, val health: HealthDto?)
 
+/** Token de FCM de este celular, para que el servidor pueda despertar el seguimiento. */
+data class ChildPushTokenRequest(val token: String)
+
 /** Misión asignada por el padre. status: "open" | "waiting" (esperando que la revisen) | "confirmed". */
 data class TaskDto(
     val id: String,

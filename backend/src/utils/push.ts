@@ -58,3 +58,20 @@ export function zoneKindFromName(name: string): "home" | "school" | "zone" {
   if (/(cole|escuela|school|instituto|liceo|jardin|universidad|facu)/.test(n)) return "school";
   return "zone";
 }
+
+/**
+ * Aviso de máxima prioridad para "despertar" la app del hijo: Android lo entrega aunque el celular esté en
+ * reposo y le permite arrancar el seguimiento. Devuelve "invalid" si el token ya no sirve (app desinstalada).
+ */
+export async function sendWakePush(token: string): Promise<"ok" | "invalid" | "off" | "error"> {
+  if (!messaging) return "off";
+  try {
+    await messaging.send({ token, data: { kind: "wake" }, android: { priority: "high", ttl: 10 * 60_000 } });
+    return "ok";
+  } catch (err: any) {
+    const code = String(err?.code ?? "");
+    if (code.includes("registration-token-not-registered") || code.includes("invalid-registration-token") || code.includes("invalid-argument")) return "invalid";
+    console.error("[push] error despertando al hijo", err);
+    return "error";
+  }
+}

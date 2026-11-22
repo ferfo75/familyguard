@@ -58,6 +58,8 @@ class LocationFallbackWorker(
             )
         }
         runCatching { com.familyguard.child.data.PingOutbox.flush(context, heartbeatApi) }
+        // El token de avisos puede cambiar: se vuelve a registrar de paso (si falla no pasa nada).
+        runCatching { com.familyguard.child.push.ChildPush.register(context, prefs) }
 
         // Si el servicio en primer plano no llegó a levantar (Android 12+
         // puede rechazarlo desde segundo plano en algunos estados), al

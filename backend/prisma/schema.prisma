@@ -84,6 +84,10 @@ model ChildDevice {
   healthAppVersion          String?
   healthAt                  DateTime?
 
+  // Para "despertar" el teléfono desde el servidor (aviso push de máxima prioridad) cuando deja de reportar.
+  fcmToken   String?
+  lastWakeAt DateTime?
+
   locationPings   LocationPing[]
   geofences       Geofence[]
   geofenceEvents  GeofenceEvent[]

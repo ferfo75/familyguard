@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -92,6 +93,18 @@ fun HomeScreen(prefs: Prefs, onOpenChild: (ChildLatest) -> Unit) {
                             now = now,
                             onOpen = { onOpenChild(child) },
                             onDelete = { confirmDeleteChild = child },
+                            onWake = {
+                                scope.launch {
+                                    val r = runCatching { ApiClient.create(prefs).wakeChild(child.childDeviceId) }.getOrNull()
+                                    val msg = when {
+                                        r?.isSuccessful == true -> "Aviso enviado a ${child.childName}. Si el celular está encendido, reporta en un minuto."
+                                        r?.code() == 409 -> "El celular de ${child.childName} todavía no se registró para recibir avisos. Abrí la app del hijo/a una vez."
+                                        else -> "No se pudo avisar. Puede estar apagado o sin datos."
+                                    }
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                    if (r?.isSuccessful == true) { delay(25_000); LatestRepository.refresh(prefs) }
+                                }
+                            },
                         )
                     }
                 }
@@ -129,7 +142,7 @@ fun HomeScreen(prefs: Prefs, onOpenChild: (ChildLatest) -> Unit) {
 }
 
 @Composable
-private fun MemberCard(child: ChildLatest, color: androidx.compose.ui.graphics.Color, now: Long, onOpen: () -> Unit, onDelete: () -> Unit) {
+private fun MemberCard(child: ChildLatest, color: androidx.compose.ui.graphics.Color, now: Long, onOpen: () -> Unit, onDelete: () -> Unit, onWake: () -> Unit) {
     val freshness = TimeAgo.freshness(child.lastSeenAt, now)
     val loc = child.location
     Card(
@@ -161,8 +174,14 @@ private fun MemberCard(child: ChildLatest, color: androidx.compose.ui.graphics.C
             }
             Column(horizontalAlignment = Alignment.End) {
                 child.batteryLevel?.let { BatteryChip(it) }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Eliminar a ${child.childName}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row {
+                    // Despierta el celular del hijo/a y le pide que mande su ubicación ahora.
+                    IconButton(onClick = onWake) {
+                        Icon(Icons.Filled.MyLocation, contentDescription = "Pedir ubicación de ${child.childName} ahora", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Eliminar a ${child.childName}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

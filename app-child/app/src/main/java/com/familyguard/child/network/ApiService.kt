@@ -17,6 +17,10 @@ interface ApiService {
     @POST("location/heartbeat")
     suspend fun sendHeartbeat(@Body body: HeartbeatRequest): Response<Unit>
 
+    /** Para que el servidor pueda "despertar" el seguimiento si Android lo duerme. */
+    @POST("push/child-register")
+    suspend fun registerChildPush(@Body body: ChildPushTokenRequest): Response<Unit>
+
     @GET("tasks/mine")
     suspend fun getMyTasks(): Response<TasksResponse>
 

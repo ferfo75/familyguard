@@ -4,7 +4,7 @@ import * as THREE from "./vendor/three.module.min.js";
 export { THREE };
 
 /** Celulares modestos: menos resolución y sombras más livianas para que no se trabe. */
-export function isLowEnd() { return (navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 3; }
+export function isLowEnd() { return (navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 8) <= 4; }
 
 /** Números al azar repetibles (para que las texturas salgan siempre iguales). */
 export function rng(seed) {

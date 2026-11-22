@@ -404,6 +404,8 @@ class MainActivity : ComponentActivity() {
         LocationTrackingService.start(this)
         scheduleUsageReportWorker()
         scheduleLocationFallbackWorker()
+        // Para que el servidor pueda despertar el seguimiento si Android lo duerme.
+        lifecycleScope.launch { com.familyguard.child.push.ChildPush.register(applicationContext) }
         promptUsageAccessIfNeeded()
     }
 

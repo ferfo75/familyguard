@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "tsx --test src/games/*.test.ts",
+    "test": "tsx --test src/games/*.test.ts src/utils/*.test.ts",
     "start": "node dist/index.js",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",

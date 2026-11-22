@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "../db";
-import { sendPushToTokens } from "../utils/push";
+import { sendPushToTokens, sendWakePush } from "../utils/push";
+import { shouldWake } from "../utils/wake";
 
 export const internalRouter = Router();
 
@@ -46,5 +47,16 @@ internalRouter.post("/check-silence", async (req, res) => {
     notified += 1;
   }
 
-  res.json({ checked: true, silentChildren: silentChildren.length, notified });
+  // Antes de preocupar al padre: si el seguimiento de un hijo se durmió, se le manda un aviso de máxima prioridad
+  // al celular para que la app vuelva a arrancar sola (hace falta que haya registrado su token de FCM).
+  const candidates = await db.childDevice.findMany({ where: { fcmToken: { not: null } } });
+  let woken = 0;
+  for (const c of candidates) {
+    if (!shouldWake(c)) continue;
+    const r = await sendWakePush(c.fcmToken!);
+    await db.childDevice.update({ where: { id: c.id }, data: { lastWakeAt: new Date(), ...(r === "invalid" ? { fcmToken: null } : {}) } });
+    if (r === "ok") woken += 1;
+  }
+
+  res.json({ checked: true, silentChildren: silentChildren.length, notified, woken });
 });

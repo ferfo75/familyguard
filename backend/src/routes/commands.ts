@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../db";
 import { requireParentAuth } from "../middleware/auth";
 import { isChildConnected, sendCommandToChild } from "../socket";
+import { sendWakePush } from "../utils/push";
 
 export const commandsRouter = Router();
 
@@ -33,5 +34,17 @@ commandsRouter.post("/:childDeviceId/stop-ring", requireParentAuth, async (req, 
   if (!child) return res.status(404).json({ error: "not_found" });
 
   sendCommandToChild(childDeviceId, "command:stopRing", {});
+  res.json({ ok: true });
+});
+
+// "Pedir ubicación ahora": despierta la app del hijo con un aviso de máxima prioridad (sirve aunque el
+// seguimiento esté dormido). Si el celular está apagado o sin datos, el aviso no llega.
+commandsRouter.post("/:childDeviceId/wake", requireParentAuth, async (req, res) => {
+  const child = await db.childDevice.findFirst({ where: { id: req.params.childDeviceId, parentId: req.parentId! } });
+  if (!child) return res.status(404).json({ error: "not_found" });
+  if (!child.fcmToken) return res.status(409).json({ error: "no_push_token", message: "Ese celular todavía no se registró para recibir avisos. Abrí la app del hijo/a una vez." });
+  const r = await sendWakePush(child.fcmToken);
+  await db.childDevice.update({ where: { id: child.id }, data: { lastWakeAt: new Date(), ...(r === "invalid" ? { fcmToken: null } : {}) } });
+  if (r !== "ok") return res.status(502).json({ error: "push_failed", result: r });
   res.json({ ok: true });
 });

@@ -101,6 +101,10 @@ interface ApiService {
     @POST("commands/{childDeviceId}/ring")
     suspend fun ringDevice(@Path("childDeviceId") childDeviceId: String): Response<Unit>
 
+    /** Despierta la app del hijo/a con un aviso de máxima prioridad (sirve aunque el seguimiento esté dormido). */
+    @POST("commands/{childDeviceId}/wake")
+    suspend fun wakeChild(@Path("childDeviceId") childDeviceId: String): Response<Unit>
+
     @POST("commands/{childDeviceId}/stop-ring")
     suspend fun stopRingDevice(@Path("childDeviceId") childDeviceId: String): Response<Unit>
 
