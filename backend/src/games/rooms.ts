@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
 import * as truco from "./truco";
 import * as ludo from "./ludo";
+import * as chess from "./chess";
+import * as generala from "./generala";
+import * as golf from "./minigolf";
 
 /**
  * Salas de juego en memoria, una lista por familia (parentId).
@@ -10,7 +13,8 @@ import * as ludo from "./ludo";
  * A cambio no hay tablas, ni migraciones, ni limpieza de datos de chicos.
  */
 
-export type GameType = "truco" | "ludo";
+export type GameType = "truco" | "ludo" | "chess" | "generala" | "minigolf";
+export type AnyState = truco.TrucoState | ludo.LudoState | chess.ChessState | generala.GeneralaState | golf.GolfState;
 export interface Seat { key: string; name: string; team?: 0 | 1 }
 
 export interface Room {
@@ -20,14 +24,14 @@ export interface Room {
   hostKey: string;
   seats: Seat[];
   status: "lobby" | "playing" | "ended";
-  state: truco.TrucoState | ludo.LudoState | null;
+  state: AnyState | null;
   order: string[]; // clave de jugador por asiento, una vez empezada la partida
   createdAt: number;
   updatedAt: number;
 }
 
 const rooms = new Map<string, Room>();
-const MAX_SEATS: Record<GameType, number> = { truco: 4, ludo: 4 };
+const MAX_SEATS: Record<GameType, number> = { truco: 4, ludo: 4, chess: 2, generala: 4, minigolf: 4 };
 
 export function roomsOfFamily(familyId: string): Room[] {
   return [...rooms.values()].filter((r) => r.familyId === familyId);
@@ -49,7 +53,7 @@ type Err = { error: string };
 const err = (error: string): Err => ({ error });
 
 export function createRoom(familyId: string, type: GameType, me: Seat): Room | Err {
-  if (type !== "truco" && type !== "ludo") return err("bad_game");
+  if (!(type in MAX_SEATS)) return err("bad_game");
   if (roomOf(familyId, me.key)) return err("already_in_room");
   const now = Date.now();
   const r: Room = {
@@ -116,10 +120,21 @@ export function startRoom(familyId: string, roomId: string, key: string): Room |
     const ordered: Seat[] = a.length === 1 ? [a[0], b[0]] : [a[0], b[0], a[1], b[1]];
     r.order = ordered.map((s) => s.key);
     r.state = truco.createTruco(ordered.map((s) => ({ id: s.key, name: s.name })));
-  } else {
+  } else if (r.type === "ludo") {
     if (r.seats.length < 2) return err("ludo_needs_2_to_4");
     r.order = r.seats.map((s) => s.key);
     r.state = ludo.createLudo(r.seats.map((s) => ({ id: s.key, name: s.name })));
+  } else if (r.type === "chess") {
+    if (r.seats.length !== 2) return err("chess_needs_2");
+    const st = chess.createChess(r.seats.map((s) => ({ id: s.key, name: s.name })));
+    r.order = st.players.map((p) => p.id); // el sorteo de colores define el asiento
+    r.state = st;
+  } else if (r.type === "generala") {
+    r.order = r.seats.map((s) => s.key);
+    r.state = generala.createGenerala(r.seats.map((s) => ({ id: s.key, name: s.name })));
+  } else {
+    r.order = r.seats.map((s) => s.key);
+    r.state = golf.createGolf(r.seats.map((s) => ({ id: s.key, name: s.name })));
   }
   r.status = "playing";
   r.updatedAt = Date.now();
@@ -132,11 +147,29 @@ export function act(familyId: string, roomId: string, key: string, action: any):
   if (r.status !== "playing" || !r.state) return err("not_playing");
   const seat = r.order.indexOf(key);
   if (seat < 0) return err("not_a_player");
-  const clean = r.state.kind === "truco" ? sanitizeTruco(action) : sanitizeLudo(action);
-  if (!clean) return err("bad_action"); // jamás se interpreta una acción mal formada como otra distinta
-  const res = r.state.kind === "truco"
-    ? truco.apply(r.state, seat, clean as truco.Action)
-    : ludo.apply(r.state, seat, clean as ludo.Action);
+  const st = r.state;
+  let res: { ok: true } | { ok: false; error: string };
+  if (st.kind === "truco") {
+    const clean = sanitizeTruco(action);
+    if (!clean) return err("bad_action"); // jamás se interpreta una acción mal formada como otra distinta
+    res = truco.apply(st, seat, clean);
+  } else if (st.kind === "ludo") {
+    const clean = sanitizeLudo(action);
+    if (!clean) return err("bad_action");
+    res = ludo.apply(st, seat, clean);
+  } else if (st.kind === "chess") {
+    const clean = sanitizeChess(action);
+    if (!clean) return err("bad_action");
+    res = chess.apply(st, seat, clean);
+  } else if (st.kind === "generala") {
+    const clean = sanitizeGenerala(action);
+    if (!clean) return err("bad_action");
+    res = generala.apply(st, seat, clean);
+  } else {
+    const clean = sanitizeGolf(action);
+    if (!clean) return err("bad_action");
+    res = golf.apply(st, seat, clean);
+  }
   if (!res.ok) return err(res.error);
   r.updatedAt = Date.now();
   if (r.state.winner !== null) r.status = "ended";
@@ -163,6 +196,29 @@ function sanitizeLudo(a: any): ludo.Action | null {
   return null;
 }
 
+function sanitizeChess(a: any): chess.Action | null {
+  if (a?.t === "resign") return { t: "resign" };
+  if (a?.t === "move" && typeof a.from === "string" && typeof a.to === "string") {
+    const promo = ["q", "r", "b", "n"].includes(a.promotion) ? a.promotion : undefined;
+    return { t: "move", from: a.from, to: a.to, promotion: promo };
+  }
+  return null;
+}
+function sanitizeGenerala(a: any): generala.Action | null {
+  if (a?.t === "roll") {
+    const keep = Array.isArray(a.keep) && a.keep.length === 5 ? a.keep.map(Boolean) : undefined;
+    return { t: "roll", keep };
+  }
+  if (a?.t === "score" && (generala.CATEGORIES as readonly string[]).includes(a.cat)) return { t: "score", cat: a.cat };
+  return null;
+}
+function sanitizeGolf(a: any): golf.Action | null {
+  if (a?.t === "shot" && typeof a.angle === "number" && typeof a.power === "number" && Number.isFinite(a.angle) && Number.isFinite(a.power)) {
+    return { t: "shot", angle: a.angle, power: a.power };
+  }
+  return null;
+}
+
 export function viewFor(r: Room, key: string) {
   const base = { roomId: r.id, status: r.status, type: r.type, host: r.hostKey };
   if (!r.state) return { ...base, lobby: summary(r) };
@@ -171,7 +227,12 @@ export function viewFor(r: Room, key: string) {
   return {
     ...base,
     lobby: summary(r),
-    game: r.state.kind === "truco" ? truco.viewFor(r.state, seat) : ludo.viewFor(r.state, seat),
+    game:
+      r.state.kind === "truco" ? truco.viewFor(r.state, seat)
+      : r.state.kind === "ludo" ? ludo.viewFor(r.state, seat)
+      : r.state.kind === "chess" ? chess.viewFor(r.state, seat)
+      : r.state.kind === "generala" ? generala.viewFor(r.state, seat)
+      : golf.viewFor(r.state, seat),
   };
 }
 

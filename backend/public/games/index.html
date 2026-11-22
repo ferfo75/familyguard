@@ -48,6 +48,11 @@
   .win h2 { font-size:30px; margin-bottom:6px; } .confetti { font-size:34px; letter-spacing:6px; animation:pop .6s ease; }
   @keyframes pop { from { transform:scale(.3); opacity:0 } to { transform:scale(1); opacity:1 } }
 
+  .gamegrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .gbtn { display:flex; flex-direction:column; align-items:center; gap:1px; padding:10px 4px; border-radius:18px; background:var(--terracotta); text-align:center; line-height:1.15; }
+  .gbtn .gi { font-size:26px; } .gbtn b { font-size:14px; } .gbtn small { font-size:10.5px; font-weight:500; opacity:.9; }
+  .gbtn:nth-child(2) { background:var(--honey); } .gbtn:nth-child(3) { background:#3B6EA5; } .gbtn:nth-child(4) { background:var(--moss); } .gbtn:nth-child(5) { background:#7A4E8C; }
+
   /* ===== Ludo ===== */
   .chips { flex:none; display:flex; gap:5px; flex-wrap:wrap; }
   .chip { display:flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px; border:2px solid transparent; background:var(--card); font-size:12px; font-weight:700; }
@@ -158,7 +163,7 @@
     not_your_turn: "Todavía no es tu turno", card_not_in_hand: "Esa carta no está en tu mano", call_not_allowed: "No podés cantar eso ahora",
     nothing_to_answer: "No hay nada para responder", game_over: "La partida terminó", not_playing: "La partida no está en curso",
     move_first: "Primero mové una ficha", roll_first: "Primero tirá el dado", piece_not_movable: "Esa ficha no se puede mover con ese número",
-    bad_action: "Jugada inválida", server_error: "Error del servidor, probá de nuevo", bad_game: "Juego inválido",
+    bad_action: "Jugada inválida", chess_needs_2: "El ajedrez se juega de a dos", illegal_move: "Esa jugada no se puede", score_first: "Anotá el resultado antes de seguir", roll_first: "Primero tirá los dados", keep_not_all: "Dejá al menos un dado para volver a tirar", category_taken: "Esa casilla ya está anotada", wait_ball: "Esperá a que la pelota deje de rodar", server_error: "Error del servidor, probá de nuevo", bad_game: "Juego inválido",
   };
 
   // El WebView de la app le da al documento un alto de 0 aunque la ventana mida 786: ni vh, ni dvh, ni height:100% sirven ahí.
@@ -292,6 +297,29 @@
     },
   };
 
+  /* ================= Juegos en módulos (ajedrez, generala, minigolf) =================
+     Cada uno vive en su propio archivo y se descarga recién al jugarlo. Cada módulo exporta una función que recibe
+     esta API y devuelve { state(v), reset() }. */
+  const TYPES = {
+    truco: { icon: "🃏", name: "Truco", info: "1 contra 1 o 2 contra 2" },
+    ludo: { icon: "🎲", name: "Ludo", info: "de 2 a 4" },
+    chess: { icon: "♟️", name: "Ajedrez", info: "de a 2" },
+    generala: { icon: "🎯", name: "Generala", info: "de 1 a 4" },
+    minigolf: { icon: "⛳", name: "Minigolf", info: "de 1 a 4" },
+  };
+  const PLUG_FILES = { chess: "g-chess.js", generala: "g-generala.js", minigolf: "g-minigolf.js" };
+  const Plug = {
+    mods: {},
+    async get(type) {
+      if (!this.mods[type]) {
+        const m = await import("./" + PLUG_FILES[type] + "?v=11");
+        this.mods[type] = m.default(PAPI);
+      }
+      return this.mods[type];
+    },
+    resetAll() { Object.values(this.mods).forEach((m) => m.reset && m.reset()); },
+  };
+
   function ask(text, okLabel) {
     return new Promise((res) => {
       const o = document.createElement("div"); o.className = "ovl";
@@ -300,6 +328,9 @@
       document.body.appendChild(o);
     });
   }
+
+  const PAPI = { S, scr, act: (a) => A.act(a), esc, sleep, Snd, ask, toast: (m) => toast(m), emit, COLORS,
+    screen: (key, html) => { S.screen = key; scr.className = ""; scr.innerHTML = html; } };
 
   document.addEventListener("click", async (e) => {
     const el = e.target.closest("[data-a]"); if (!el) return;
@@ -322,7 +353,7 @@
   function showLobby() {
     const rows = S.rooms.filter((r) => r.status === "lobby").map((r) => `
       <div class="box row">
-        <div class="grow"><b>${r.type === "truco" ? "🃏 Truco" : "🎲 Ludo"}</b>
+        <div class="grow"><b>${TYPES[r.type].icon} ${TYPES[r.type].name}</b>
           <div class="muted">${r.seats.map((s) => esc(s.name)).join(", ")} · ${r.seats.length}/${r.max}</div></div>
         <button class="moss" data-a="join" data-id="${esc(r.id)}">Unirme</button>
       </div>`).join("");
@@ -332,14 +363,13 @@
       <div class="box">
         <h3>Crear una partida</h3>
         <p class="muted">Después se suman los demás desde su app.</p>
-        <div class="row">
-          <button class="grow big" data-a="create" data-type="truco">🃏 Truco</button>
-          <button class="grow big honey" data-a="create" data-type="ludo">🎲 Ludo</button>
+        <div class="gamegrid">
+          ${Object.keys(TYPES).map((k) => `<button class="gbtn" data-a="create" data-type="${k}"><span class="gi">${TYPES[k].icon}</span><b>${TYPES[k].name}</b><small>${TYPES[k].info}</small></button>`).join("")}
         </div>
       </div>
       ${rows ? "<h3>Salas abiertas</h3>" + rows : '<div class="muted" style="text-align:center">No hay salas abiertas todavía.</div>'}
       ${playing ? `<div class="muted" style="text-align:center">${playing} partida(s) en curso en tu familia</div>` : ""}
-      <div class="row"><span class="muted grow">Truco a 30, sin flor · Ludo de 2 a 4</span><button class="sec" data-a="snd">${Snd.on ? "🔊" : "🔇"}</button></div>
+      <div class="row"><span class="muted grow">Truco a 30, sin flor · Generala servida gana</span><button class="sec" data-a="snd">${Snd.on ? "🔊" : "🔇"}</button></div>
       <div class="tiny">Baraja española de uso familiar (origen de las imágenes por confirmar).</div>`);
   }
 
@@ -349,7 +379,7 @@
     const seatRow = (s, i) => `<div class="seatrow"><div class="dot" style="background:${truco ? COLORS[s.team === 0 ? 0 : 3] : COLORS[i % 4]}">${esc((s.name[0] || "?").toUpperCase())}</div>
       <div class="grow"><b>${esc(s.name)}</b>${s.key === L.host ? ' <span class="pill">anfitrión</span>' : ""}${truco ? `<div class="muted">Equipo ${s.team === 0 ? "A" : "B"}</div>` : ""}</div></div>`;
     showScreen("wait:" + L.id, `
-      <div class="top"><h1 class="t" style="font-size:26px;color:var(--cocoa)">${truco ? "🃏 Truco" : "🎲 Ludo"}</h1><button class="sec" data-a="leave">Salir</button></div>
+      <div class="top"><h1 class="t" style="font-size:26px;color:var(--cocoa)">${TYPES[L.type].icon} ${TYPES[L.type].name}</h1><button class="sec" data-a="leave">Salir</button></div>
       <div class="box">${L.seats.map(seatRow).join("")}<div class="muted" style="margin-top:8px">${L.seats.length}/${L.max} jugadores — esperando que se sumen…</div></div>
       ${truco && mySeat ? `<div class="box"><b>Tu equipo</b><div class="row" style="margin-top:8px">
         <button class="grow ${mySeat.team === 0 ? "" : "sec"}" data-a="join" data-id="${L.id}" data-team="0">Equipo A</button>
@@ -360,12 +390,23 @@
 
   async function handleState(v) {
     S.sending = false;
-    if (!v || !v.roomId) { S.room = null; Ludo.reset(); Truco.reset(); showLobby(); return; }
+    if (!v || !v.roomId) { S.room = null; Ludo.reset(); Truco.reset(); Plug.resetAll(); showLobby(); return; }
     S.room = v;
-    if (v.status === "lobby" || !v.game) { Ludo.reset(); Truco.reset(); showWaiting(v); return; }
+    if (v.status === "lobby" || !v.game) { Ludo.reset(); Truco.reset(); Plug.resetAll(); showWaiting(v); return; }
     const key = v.type + ":" + v.roomId;
-    if (S.screen !== key) { S.screen = key; Ludo.reset(); Truco.reset(); }
-    if (v.type === "truco") await Truco.state(v); else await Ludo.state(v);
+    if (S.screen !== key) { S.screen = key; Ludo.reset(); Truco.reset(); Plug.resetAll(); }
+    if (v.type === "truco") await Truco.state(v);
+    else if (v.type === "ludo") await Ludo.state(v);
+    else {
+      let mod;
+      try { mod = await Plug.get(v.type); } catch (e) { console.error(e); toast("No se pudo cargar el juego. Revisá la conexión."); return; }
+      try { await mod.state(v); }
+      catch (e) {
+        console.error(e);
+        if (/webgl|context/i.test(String(e && e.message))) { scr.className = "pg"; scr.innerHTML = '<div class="box"><h2>Este celular no puede mostrar los gráficos 3D</h2><p class="muted">Probá el Truco, el Ludo, la Generala o el Minigolf desde otro celular, o actualizá "Android System WebView" desde Play Store.</p><button class="sec" data-a="leave">Salir de la partida</button></div>'; }
+        else toast("Hubo un problema con el juego. Probá salir y volver a entrar.");
+      }
+    }
   }
 
   /* ================= LUDO ================= */
