@@ -1,11 +1,9 @@
-Cartas de la baraja española (patrón castellano)
+Cartas de la baraja española (patron castellano), 1 al 7 y 10 al 12 de cada palo.
 
-Origen: https://commons.wikimedia.org/wiki/File:Baraja_espa%C3%B1ola_completa.png
-Autoría: Basquetteur, a partir del trabajo de Germarquezm (Baraja española.svg), con elementos del
-laboratorio gráfico de Wikipedia y de GnuBond.
-Licencia: Creative Commons Atribución-CompartirIgual 3.0 (CC BY-SA 3.0)
-          https://creativecommons.org/licenses/by-sa/3.0/deed.es
+ESTADO ACTUAL (2026-11-22): las imagenes son las que aporto Fer en tres laminas (1-4, 5-8, 9-12), recortadas
+a 240 x 368 px en formato WebP. El ORIGEN Y LA LICENCIA DE ESAS LAMINAS NO ESTAN CONFIRMADOS.
+Antes de publicar la app fuera de la familia hay que averiguar de donde salieron y completar este archivo.
+El dorso (back.webp) es un dibujo propio de este proyecto.
 
-Cambios: la lámina original (2496 x 1595 px) se recortó en cartas individuales, se quitaron el 8 y el 9
-(no se usan en el Truco) y se redujeron a 180 px de ancho en formato WebP.
-Estas imágenes derivadas se distribuyen bajo la misma licencia CC BY-SA 3.0.
+Version anterior (ya reemplazada, sigue en el historial de git): baraja "Naipes Libres" de Basquetteur /
+Germarquezm, CC BY-SA 3.0, https://commons.wikimedia.org/wiki/File:Baraja_espa%C3%B1ola_completa.png

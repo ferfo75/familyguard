@@ -3,13 +3,15 @@ import { z } from "zod";
 import { db } from "../db";
 import { requireChildAuth, requireParentAuth } from "../middleware/auth";
 import { broadcastToFamily } from "../socket";
-import { sendPushToTokens } from "../utils/push";
+import { sendAlertPush, sendPushToTokens } from "../utils/push";
 
 /** Guarda una novedad para el padre y le avisa por push y en vivo. */
-export async function recordFeed(parentId: string, childDeviceId: string, type: string, title: string, body = "") {
+export async function recordFeed(parentId: string, childDeviceId: string, type: string, title: string, body = "", popup = false) {
   const event = await db.feedEvent.create({ data: { parentId, childDeviceId, type, title, body } });
   const tokens = (await db.pushToken.findMany({ where: { parentId } })).map((t) => t.token);
-  await sendPushToTokens(tokens, title, body);
+  // popup: mensajes del hijo ("voy en camino", "llegué bien") que suenan y aparecen sobre cualquier app.
+  if (popup) await sendAlertPush(tokens, "msg", title, body, { childDeviceId });
+  else await sendPushToTokens(tokens, title, body);
   broadcastToFamily(parentId, "feed:new", { id: event.id, type });
   return event;
 }
@@ -81,8 +83,8 @@ checkinsRouter.post("/", requireChildAuth, async (req, res) => {
   const extra = [note].filter(Boolean).join(" · ");
   const event =
     kind === "arrived"
-      ? await recordFeed(child.parentId, child.id, "checkin_arrived", `🏠 ${child.name} llegó bien`, [placeName ? `En ${placeName}` : "", extra].filter(Boolean).join(" · "))
-      : await recordFeed(child.parentId, child.id, "checkin_on_my_way", `🚶 ${child.name} va en camino`, [`Llega en ${etaMinutes} min`, extra].filter(Boolean).join(" · "));
+      ? await recordFeed(child.parentId, child.id, "checkin_arrived", `🏠 ${child.name} llegó bien`, [placeName ? `En ${placeName}` : "", extra].filter(Boolean).join(" · "), true)
+      : await recordFeed(child.parentId, child.id, "checkin_on_my_way", `🚶 ${child.name} va en camino`, [`Llega en ${etaMinutes} min`, extra].filter(Boolean).join(" · "), true);
 
   res.status(201).json({ ok: true, id: event.id, placeName });
 });

@@ -80,7 +80,7 @@
   .sb .lbl { flex:1; font-size:11px; color:var(--muted); line-height:1.15; min-width:0; overflow:hidden; text-overflow:ellipsis; }
   .sb b { font-size:28px; font-family:Georgia,serif; line-height:1; }
   .sb .bar { position:absolute; }
-  .felt { flex:1; min-height:190px; position:relative; border-radius:26px; background:radial-gradient(ellipse at center,#4a9459 0%,#3D7A4A 55%,#2b5a36 100%); box-shadow:inset 0 0 0 5px #6b4a2e, inset 0 0 26px rgba(0,0,0,.35); color:#fff; overflow:hidden; --sh:clamp(64px,11.5vh,98px); --sw:calc(var(--sh) * .652); }
+  .felt { flex:1; min-height:190px; position:relative; border-radius:26px; background:radial-gradient(ellipse at center,#4a9459 0%,#3D7A4A 55%,#2b5a36 100%); box-shadow:inset 0 0 0 5px #6b4a2e, inset 0 0 26px rgba(0,0,0,.35); color:#fff; overflow:hidden; --sh:clamp(80px,14vh,116px); --sw:calc(var(--sh) * .652); }
   .seat { position:absolute; text-align:center; width:76px; }
   .seat.pos-top { top:5px; left:50%; margin-left:-38px; } .seat.pos-bottom { bottom:4px; left:50%; margin-left:-38px; }
   .seat.pos-left { left:3px; top:50%; margin-top:-34px; } .seat.pos-right { right:3px; top:50%; margin-top:-34px; }
@@ -115,13 +115,17 @@
   .slot .cf.winc { transform:scale(1.1) rotate(var(--rot,0deg)); transition:all .25s; z-index:3; filter:drop-shadow(0 0 7px #FFD54A) drop-shadow(0 0 3px #FFD54A); }
   .slot .cf.lose { opacity:.5; transition:opacity .3s; }
   .slot .cf.out { opacity:0; transition:opacity .25s, transform .3s; transform:scale(.7) rotate(var(--rot,0deg)); }
+  .slot { cursor:zoom-in; }
+  .zoom { position:fixed; inset:0; z-index:50; background:rgba(15,9,4,.72); display:none; align-items:center; justify-content:center; }
+  .zoom.show { display:flex; }
+  .zoom img { height:min(72%,520px); aspect-ratio:180 / 276; border-radius:14px; box-shadow:0 10px 40px rgba(0,0,0,.6); background:#fff; }
   .cardimg { display:block; width:100%; height:100%; border-radius:7px; box-shadow:0 2px 6px rgba(0,0,0,.45); background:#fff; pointer-events:none; }
   .hres { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(.85); background:rgba(20,12,6,.86); color:#fff; border-radius:18px; padding:12px 20px; text-align:center; z-index:8; opacity:0; pointer-events:none; transition:all .25s; width:78%; }
   .hres.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
   .hres b { display:block; font-size:19px; font-family:Georgia,serif; } .hres span { font-size:14px; opacity:.9; }
   .status { flex:none; text-align:center; font-weight:800; padding:5px 8px; border-radius:12px; background:var(--honey-soft); color:var(--on-honey); font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .status.mine { background:var(--terracotta); color:#fff; animation:glow2 1.4s infinite; } @keyframes glow2 { 50% { filter:brightness(1.15); } }
-  .hand { flex:none; display:flex; gap:8px; justify-content:center; align-items:flex-end; height:clamp(92px,15.5vh,134px); padding-top:8px; }
+  .hand { flex:none; display:flex; gap:8px; justify-content:center; align-items:flex-end; height:clamp(112px,19.5vh,164px); padding-top:8px; }
   .hand .hc { height:100%; aspect-ratio:180 / 276; transition:transform .18s; }
   .hand .hc.can { cursor:pointer; transform:translateY(-6px); } .hand .hc.can .cardimg { box-shadow:0 6px 14px rgba(255,213,74,.6), 0 2px 6px rgba(0,0,0,.5); }
   .hand .hc.can:active { transform:translateY(-16px); }
@@ -336,7 +340,7 @@
       ${rows ? "<h3>Salas abiertas</h3>" + rows : '<div class="muted" style="text-align:center">No hay salas abiertas todavía.</div>'}
       ${playing ? `<div class="muted" style="text-align:center">${playing} partida(s) en curso en tu familia</div>` : ""}
       <div class="row"><span class="muted grow">Truco a 30, sin flor · Ludo de 2 a 4</span><button class="sec" data-a="snd">${Snd.on ? "🔊" : "🔇"}</button></div>
-      <div class="tiny">Cartas: baraja española (patrón castellano) de Germarquezm y Basquetteur, licencia CC BY-SA 3.0, vía Wikimedia Commons (commons.wikimedia.org/wiki/File:Baraja_española_completa.png). Recortadas y reducidas para esta app.</div>`);
+      <div class="tiny">Baraja española de uso familiar (origen de las imágenes por confirmar).</div>`);
   }
 
   function showWaiting(v) {
@@ -515,11 +519,11 @@
     const reset = () => { T = null; };
     const keyOf = (c) => c.suit + c.rank;
     const NAMES_ES = { espada: "espada", basto: "basto", oro: "oro", copa: "copa" };
-    const img = (c) => `<img class="cardimg" src="cards/${c.suit}-${c.rank}.webp?v=1" alt="${c.rank} de ${NAMES_ES[c.suit]}" draggable="false">`;
+    const img = (c) => `<img class="cardimg" src="cards/${c.suit}-${c.rank}.webp?v=2" alt="${c.rank} de ${NAMES_ES[c.suit]}" draggable="false">`;
 
     function preloadCards() {
-      SUITS.forEach((s) => [1, 2, 3, 4, 5, 6, 7, 10, 11, 12].forEach((r) => { const i = new Image(); i.src = `cards/${s}-${r}.webp?v=1`; }));
-      const b = new Image(); b.src = "cards/back.webp?v=1";
+      SUITS.forEach((s) => [1, 2, 3, 4, 5, 6, 7, 10, 11, 12].forEach((r) => { const i = new Image(); i.src = `cards/${s}-${r}.webp?v=2`; }));
+      const b = new Image(); b.src = "cards/back.webp?v=2";
     }
 
     function build(g) {
@@ -552,6 +556,19 @@
         if (animate) Snd.card();
       });
     }
+    // Tocar una carta de la mesa la muestra grande un momento, para distinguirla bien.
+    function zoomCard(src, alt) {
+      let z = $("zoom");
+      if (!z) { z = document.createElement("div"); z.id = "zoom"; z.className = "zoom"; z.addEventListener("click", () => z.classList.remove("show")); document.body.appendChild(z); }
+      z.innerHTML = `<img src="${src}" alt="${alt}" draggable="false">`;
+      z.classList.add("show");
+      clearTimeout(zoomCard.t); zoomCard.t = setTimeout(() => z.classList.remove("show"), 3500);
+    }
+    document.addEventListener("click", (e) => {
+      const im = e.target.closest && e.target.closest(".slot");
+      const card = im && im.querySelector(".cardimg");
+      if (card) zoomCard(card.src, card.alt);
+    });
     function clearSlots() { document.querySelectorAll(".slot").forEach((s) => { s.dataset.k = ""; s.innerHTML = ""; }); }
 
     function showShout(sh) {
@@ -569,7 +586,7 @@
       $("hand").innerHTML = g.myHand.map((c, i) => `<div class="hc ${g.allowed.play ? "can" : ""} ${deal ? "deal" : ""}" style="animation-delay:${i * 90}ms" data-a="act" data-j='${esc(JSON.stringify({ t: "play", card: { suit: c.suit, rank: c.rank } }))}'>${img(c)}</div>`).join("");
     }
     function renderBacks(g) {
-      g.players.forEach((p) => { const bk = $("bk" + p.seat); if (bk) bk.innerHTML = Array.from({ length: p.cards }, () => '<img src="cards/back.webp?v=1" alt="" draggable="false">').join(""); });
+      g.players.forEach((p) => { const bk = $("bk" + p.seat); if (bk) bk.innerHTML = Array.from({ length: p.cards }, () => '<img src="cards/back.webp?v=2" alt="" draggable="false">').join(""); });
     }
     const teamNames = (g, t) => g.players.filter((p) => p.team === t).map((p) => (p.seat === g.seat ? "Vos" : p.name)).join(" y ");
 
@@ -591,7 +608,7 @@
       const cb = (c) => `<button class="${["envido", "real", "falta"].indexOf(c) >= 0 ? "honey" : ""}" data-a="act" data-j='${esc(JSON.stringify({ t: "call", call: c }))}'>${CL[c]}</button>`;
       let h = "";
       if (al.respond) {
-        h += `<button class="resp moss" data-a="act" data-j='{"t":"respond","r":"quiero"}'>✔ Quiero</button><button class="resp brick" data-a="act" data-j='{"t":"respond","r":"noquiero"}'>✖ No quiero</button>`;
+        h += `<button class="resp moss" data-a="act" data-j='{"t":"respond","r":"quiero"}'>✔ Quiero</button><button class="resp brick" data-a="act" data-j='{"t":"respond","r":"noquiero"}'>✖ No quiero</button>` + (al.mazo ? `<button class="sec" data-a="mazo">Al mazo</button>` : "");
         if (al.calls.length) h += `<div class="hint">o subí la apuesta:</div>` + al.calls.map(cb).join("");
       } else if (al.play) {
         h += al.calls.map(cb).join("") + `<button class="sec" data-a="mazo">Al mazo</button>`;

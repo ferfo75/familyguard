@@ -12,10 +12,10 @@ const CHILD_APP_VERSION = {
 };
 
 const PARENT_APP_VERSION = {
-  versionCode: 15,
-  versionName: "0.9.2",
+  versionCode: 16,
+  versionName: "0.10.0",
   downloadUrl: "/apks/familyguard-padre-latest.apk",
-  notes: "Arreglo: los nombres de las pestañas ya no se parten en celulares angostos, y el aviso de \"no reporta\" explica qué hacer. Incluye cuentas por adulto, cerrar sesión y los juegos.",
+  notes: "Alertas con sonido propio: el SOS suena como alarma y aparece en pantalla completa sobre cualquier app; \"voy en camino\", llegada a casa y llegada al colegio suenan distinto cada uno. Después de instalar, entrá a Más → Alertas en este celular y tocá Permitir en cada punto. Truco: baraja nueva con cartas más grandes (se agrandan al tocarlas) e irse al mazo vale como un no quiero.",
 };
 
 // Las dos apps llaman esto al arrancar para saber si hay una versión más

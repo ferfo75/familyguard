@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { requireChildAuth, requireParentAuth } from "../middleware/auth";
 import { broadcastToFamily } from "../socket";
-import { sendPushToTokens } from "../utils/push";
+import { sendAlertPush } from "../utils/push";
 
 export const sosRouter = Router();
 
@@ -41,7 +41,12 @@ sosRouter.post("/", requireChildAuth, async (req, res) => {
   });
 
   const tokens = (await db.pushToken.findMany({ where: { parentId: req.parentId! } })).map((t) => t.token);
-  await sendPushToTokens(tokens, "🆘 Alerta de " + child?.name, alert.message || "Pidió ayuda. Tocá para ver su ubicación.");
+  await sendAlertPush(tokens, "sos", "🆘 " + (child?.name ?? "Tu hijo/a") + " pidió ayuda", alert.message || "Tocó el botón de pánico.", {
+    alertId: alert.id,
+    childName: child?.name ?? "Tu hijo/a",
+    lat: String(alert.lat),
+    lng: String(alert.lng),
+  });
 
   res.status(201).json({ ok: true, alert });
 });

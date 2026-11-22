@@ -29,6 +29,24 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
+        // Avisos con tipo (SOS, mensaje, casa, colegio): los maneja AlertCenter con su sonido y ventana.
+        val kind = message.data["kind"]
+        if (kind != null) {
+            com.familyguard.parent.alerts.AlertCenter.handle(
+                applicationContext,
+                com.familyguard.parent.alerts.FamilyAlert(
+                    kind = kind,
+                    title = message.data["title"] ?: getString(R.string.app_name),
+                    body = message.data["body"] ?: "",
+                    lat = message.data["lat"]?.toDoubleOrNull(),
+                    lng = message.data["lng"]?.toDoubleOrNull(),
+                    alertId = message.data["alertId"],
+                ),
+            )
+            return
+        }
+
+        // Avisos comunes (batería baja, viaje, etc.): notificación simple.
         val title = message.notification?.title ?: getString(R.string.app_name)
         val body = message.notification?.body ?: ""
         ensureChannel()

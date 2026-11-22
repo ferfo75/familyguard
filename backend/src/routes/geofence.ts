@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { requireParentAuth } from "../middleware/auth";
 import { broadcastToFamily } from "../socket";
-import { sendPushToTokens } from "../utils/push";
+import { sendAlertPush, zoneKindFromName } from "../utils/push";
 
 export const geofenceRouter = Router();
 
@@ -85,6 +85,10 @@ export async function evaluateGeofencesForPing(childDeviceId: string, parentId: 
 
     const tokens = (await db.pushToken.findMany({ where: { parentId } })).map((t) => t.token);
     const verb = isInside ? "entró a" : "salió de";
-    await sendPushToTokens(tokens, "FamilyGuard", `${child?.name} ${verb} "${fence.name}"`);
+    // Al llegar a casa o al colegio suena y aparece una ventana, cada uno con su sonido; el resto, aviso común.
+    const kind = isInside ? zoneKindFromName(fence.name) : "zone";
+    const who = child?.name ?? "Tu hijo/a";
+    const title = kind === "home" ? `🏠 ${who} llegó a casa` : kind === "school" ? `🏫 ${who} llegó al colegio` : "FamilyGuard";
+    await sendAlertPush(tokens, kind, title, `${who} ${verb} "${fence.name}"`, { childDeviceId });
   }
 }

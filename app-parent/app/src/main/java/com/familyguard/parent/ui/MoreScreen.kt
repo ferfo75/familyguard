@@ -69,6 +69,8 @@ fun MoreScreen(prefs: Prefs, children: List<ChildLatest>, onGames: () -> Unit, o
             }
         }
         Spacer(Modifier.height(18.dp))
+        AlertsSetupSection()
+        Spacer(Modifier.height(18.dp))
         AccountSection(prefs)
         Spacer(Modifier.height(24.dp))
     }

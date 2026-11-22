@@ -100,23 +100,61 @@ test("truco querido, retruco y vale cuatro: solo sube el que aceptó", () => {
   assert.equal(allowedFor(s, 1).calls.length, 0);
 });
 
-test("truco no querido da 1 punto; retruco no querido 2; mazo da lo que vale", () => {
-  let s = game1v1([c("espada", 1), c("copa", 4), c("copa", 5)], [c("oro", 3), c("basto", 4), c("oro", 4)]);
+test("truco no querido da 1 punto; retruco no querido 2; vale cuatro no querido 3", () => {
+  const mk = () => game1v1([c("espada", 1), c("copa", 4), c("copa", 5)], [c("oro", 3), c("basto", 4), c("oro", 4)]);
+  let s = mk();
   apply(s, 0, { t: "call", call: "truco" });
   apply(s, 1, { t: "respond", r: "noquiero" });
   assert.deepEqual(s.scores, [1, 0]);
 
-  s = game1v1([c("espada", 1), c("copa", 4), c("copa", 5)], [c("oro", 3), c("basto", 4), c("oro", 4)]);
+  s = mk();
   apply(s, 0, { t: "call", call: "truco" });
   apply(s, 1, { t: "call", call: "retruco" });
   apply(s, 0, { t: "respond", r: "noquiero" });
   assert.deepEqual(s.scores, [0, 2]);
 
-  s = game1v1([c("espada", 1), c("copa", 4), c("copa", 5)], [c("oro", 3), c("basto", 4), c("oro", 4)]);
+  s = mk();
+  apply(s, 0, { t: "call", call: "truco" });
+  apply(s, 1, { t: "call", call: "retruco" });
+  apply(s, 0, { t: "call", call: "valecuatro" });
+  apply(s, 1, { t: "respond", r: "noquiero" });
+  assert.deepEqual(s.scores, [3, 0]);
+});
+
+test("mazo: sin truco da 1; con truco sin contestar vale como no quiero; con truco querido da lo que vale", () => {
+  const mk = () => game1v1([c("espada", 1), c("copa", 4), c("copa", 5)], [c("oro", 3), c("basto", 4), c("oro", 4)]);
+  // sin truco cantado
+  let s = mk();
+  apply(s, 0, { t: "mazo" });
+  assert.deepEqual(s.scores, [0, 1]);
+
+  // truco cantado y sin contestar: el rival se va al mazo = no quiero (1)
+  s = mk();
+  apply(s, 0, { t: "call", call: "truco" });
+  assert.equal(allowedFor(s, 1).mazo, true);
+  assert.equal(allowedFor(s, 0).mazo, false); // el que cantó espera
+  apply(s, 1, { t: "mazo" });
+  assert.deepEqual(s.scores, [1, 0]);
+
+  // vale cuatro cantado y sin contestar: mazo = 3 para el que lo cantó
+  s = mk();
+  apply(s, 0, { t: "call", call: "truco" });
+  apply(s, 1, { t: "call", call: "retruco" });
+  apply(s, 0, { t: "call", call: "valecuatro" });
+  apply(s, 1, { t: "mazo" });
+  assert.deepEqual(s.scores, [3, 0]);
+
+  // truco ya querido: mazo da lo que vale la mano (2)
+  s = mk();
   apply(s, 0, { t: "call", call: "truco" });
   apply(s, 1, { t: "respond", r: "quiero" });
   apply(s, 0, { t: "mazo" });
   assert.deepEqual(s.scores, [0, 2]);
+
+  // con un envido sin contestar no se puede ir al mazo: primero hay que responder
+  s = mk();
+  apply(s, 0, { t: "call", call: "envido" });
+  assert.equal(allowedFor(s, 1).mazo, false);
 });
 
 test("envido: querido, no querido y encadenado", () => {

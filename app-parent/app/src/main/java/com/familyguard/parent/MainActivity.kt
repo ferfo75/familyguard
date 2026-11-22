@@ -33,9 +33,6 @@ import com.familyguard.parent.util.NavigationIntents
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-/** Datos de una alerta de pánico recibida en vivo por socket, para el diálogo global. */
-private data class SosUi(val childName: String, val lat: Double, val lng: Double, val message: String?)
-
 class MainActivity : ComponentActivity() {
 
     private val prefs by lazy { Prefs(applicationContext) }
@@ -60,21 +57,36 @@ class MainActivity : ComponentActivity() {
                     val token by prefs.tokenFlow.collectAsState(initial = null)
                     // Al cerrarse la sesión no debe quedar nada del usuario anterior en memoria.
                     LaunchedEffect(isLoggedIn) { if (!isLoggedIn) LatestRepository.reset() }
-                    var activeSos by remember { mutableStateOf<SosUi?>(null) }
+                    // Android 13+: sin este permiso no se muestra ninguna notificación.
+                    val notifLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+                    ) {}
+                    LaunchedEffect(isLoggedIn) {
+                        if (isLoggedIn && android.os.Build.VERSION.SDK_INT >= 33 &&
+                            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
                     var updateInfo by remember { mutableStateOf<com.familyguard.parent.network.AppVersionInfo?>(null) }
                     var downloadingUpdate by remember { mutableStateOf(false) }
 
                     LaunchedEffect(token) {
                         if (token != null) {
                             SocketManager.connect(token!!)
-                            // Alerta en vivo: aparece de inmediato sin importar qué
-                            // pantalla se esté mirando, con quién la mandó.
+                            // Alerta en vivo (app abierta): misma sirena y ventana que por push.
+                            // Si llegan las dos, AlertCenter atiende una sola por id de alerta.
                             SocketManager.onSosAlert { json: JSONObject ->
-                                activeSos = SosUi(
-                                    childName = json.optString("childName", "Tu hijo/a"),
-                                    lat = json.optDouble("lat"),
-                                    lng = json.optDouble("lng"),
-                                    message = if (json.isNull("message") || !json.has("message")) null else json.getString("message"),
+                                val who = json.optString("childName", "Tu hijo/a")
+                                val msg = if (json.isNull("message") || !json.has("message")) null else json.getString("message")
+                                com.familyguard.parent.alerts.AlertCenter.handle(
+                                    applicationContext,
+                                    com.familyguard.parent.alerts.FamilyAlert(
+                                        kind = "sos",
+                                        title = "🆘 $who pidió ayuda",
+                                        body = msg ?: "Tocó el botón de pánico.",
+                                        lat = json.optDouble("lat").takeIf { !it.isNaN() },
+                                        lng = json.optDouble("lng").takeIf { !it.isNaN() },
+                                        alertId = json.optString("id").ifEmpty { null },
+                                    ),
                                 )
                             }
                             // Cada inicio de sesión registra este celular para recibir los avisos de la familia.
@@ -96,8 +108,6 @@ class MainActivity : ComponentActivity() {
                     } else {
                         LoginScreen(prefs, onLoggedIn = {})
                     }
-
-                    activeSos?.let { sos -> SosAlertDialog(sos, onDismiss = { activeSos = null }) }
 
                     updateInfo?.let { info ->
                         AlertDialog(
@@ -123,31 +133,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    @Composable
-    private fun SosAlertDialog(sos: SosUi, onDismiss: () -> Unit) {
-        val context = LocalContext.current
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-            title = { Text("🆘 ${sos.childName} pidió ayuda") },
-            text = {
-                Column {
-                    Text(sos.message ?: "Tocó el botón de pánico.")
-                    Spacer(Modifier.height(4.dp))
-                    Text("Ubicación: ${sos.lat}, ${sos.lng}", style = MaterialTheme.typography.bodySmall)
-                }
-            },
-            confirmButton = {
-                Button(onClick = { NavigationIntents.openGoogleMapsDirections(context, sos.lat, sos.lng) }) {
-                    Text("Ir hasta ahí")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismiss) { Text("Cerrar") }
-            },
-        )
     }
 
     @Composable

@@ -171,6 +171,18 @@ function award(s: TrucoState, team: 0 | 1, points: number, why: string) {
   }
 }
 
+/**
+ * Irse al mazo funciona como un "no quiero":
+ *  - sin truco cantado: 1 punto (como el no quiero de un truco);
+ *  - con un truco/retruco/vale cuatro cantado y sin contestar: lo mismo que el "no quiero"
+ *    (truco 1, retruco 2, vale cuatro 3);
+ *  - con la apuesta ya querida: lo que vale la mano (2, 3 o 4).
+ */
+function mazoPoints(s: TrucoState): number {
+  if (s.pending?.type === "truco") return s.pending.level - 1;
+  return s.trucoLevel;
+}
+
 function endHand(s: TrucoState, winner: 0 | 1, points: number, why: string) {
   s.handSeq += 1;
   s.lastHand = { n: s.handSeq, winner, points, why };
@@ -278,7 +290,8 @@ export function allowedFor(s: TrucoState, seat: number): Allowed {
       if (s.pending.level === 2) calls.push("retruco");
       if (s.pending.level === 3) calls.push("valecuatro");
     }
-    return { play: false, calls, respond: true, mazo: false };
+    // Con un truco sin contestar, irse al mazo vale como "no quiero".
+    return { play: false, calls, respond: true, mazo: s.pending.type === "truco" };
   }
   if (seat !== s.turn) return none;
   const calls: (EnvidoCall | TrucoCall)[] = [];
@@ -308,7 +321,7 @@ export function apply(s: TrucoState, seat: number, a: Action): Result {
       if (!allowed.mazo) return fail("not_your_turn");
       say(s, `${nm(s, seat)} se va al mazo`);
       shout(s, seat, "¡Me voy al mazo!");
-      endHand(s, other(team), s.trucoLevel, "mazo");
+      endHand(s, other(team), mazoPoints(s), "mazo");
       return OK;
     }
     case "call": {
