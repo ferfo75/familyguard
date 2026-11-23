@@ -55,11 +55,23 @@ export default function (api) {
     g.fillStyle = bg; g.fillRect(0, 0, 256, 256);
     const L = { 1: [[0.5, 0.5]], 2: [[0.27, 0.27], [0.73, 0.73]], 3: [[0.27, 0.27], [0.5, 0.5], [0.73, 0.73]], 4: [[0.27, 0.27], [0.73, 0.27], [0.27, 0.73], [0.73, 0.73]], 5: [[0.27, 0.27], [0.73, 0.27], [0.5, 0.5], [0.27, 0.73], [0.73, 0.73]], 6: [[0.27, 0.25], [0.73, 0.25], [0.27, 0.5], [0.73, 0.5], [0.27, 0.75], [0.73, 0.75]] }[n];
     for (const [x, y] of L) {
-      const r = n === 1 ? 42 : 27, cx = x * 256, cy = y * 256;
+      const cx = x * 256, cy = y * 256;
+      if (n === 1) {
+        // El uno es un cuadrado rojo grande en el centro: así se distingue de un vistazo de las demás caras.
+        const s = 118, x0 = cx - s / 2, y0 = cy - s / 2;
+        g.fillStyle = "rgba(0,0,0,.25)"; g.beginPath(); g.roundRect(x0 + 2, y0 + 4, s, s, 26); g.fill();
+        const rg = g.createLinearGradient(x0, y0, x0 + s, y0 + s); rg.addColorStop(0, "#ee5547"); rg.addColorStop(1, "#a01d13");
+        g.fillStyle = rg; g.beginPath(); g.roundRect(x0, y0, s, s, 26); g.fill();
+        g.fillStyle = "rgba(255,255,255,.28)"; g.beginPath(); g.roundRect(x0 + 10, y0 + 9, s - 36, 16, 8); g.fill();
+        continue;
+      }
+      // Puntos redondos y grandes (las demás caras no llevan ningún cuadrado).
+      const r = n === 6 ? 31 : 37;
       const rg = g.createRadialGradient(cx - r * 0.3, cy - r * 0.35, 2, cx, cy, r);
-      if (n === 1) { rg.addColorStop(0, "#e0453a"); rg.addColorStop(1, "#8f1810"); } else { rg.addColorStop(0, "#4a4440"); rg.addColorStop(1, "#0f0c0a"); }
-      g.fillStyle = "rgba(0,0,0,.22)"; g.beginPath(); g.arc(cx + 1.5, cy + 2.5, r + 2.5, 0, 6.3); g.fill();
+      rg.addColorStop(0, "#4a4440"); rg.addColorStop(1, "#0f0c0a");
+      g.fillStyle = "rgba(0,0,0,.22)"; g.beginPath(); g.arc(cx + 1.5, cy + 3, r + 2.5, 0, 6.3); g.fill();
       g.fillStyle = rg; g.beginPath(); g.arc(cx, cy, r, 0, 6.3); g.fill();
+      g.fillStyle = "rgba(255,255,255,.22)"; g.beginPath(); g.arc(cx - r * 0.35, cy - r * 0.4, r * 0.22, 0, 6.3); g.fill();
     }
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
     return t;
@@ -69,6 +81,7 @@ export default function (api) {
     const n = 14, r = 0.13, geo = new THREE.BoxGeometry(1, 1, 1, n, n, n);
     const pos = geo.attributes.position, nor = geo.attributes.normal, v = new THREE.Vector3(), inner = new THREE.Vector3(), d = new THREE.Vector3();
     const lim = 0.5 - r;
+    const uv = geo.attributes.uv, n0 = nor.array.slice(); // normales originales: dicen a qué cara pertenece cada vértice
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
       // repartir más vértices cerca de los bordes para que el redondeado se vea suave
@@ -77,6 +90,14 @@ export default function (api) {
       d.copy(v).sub(inner);
       if (d.lengthSq() > 1e-9) { d.normalize(); v.copy(inner).addScaledVector(d, r); nor.setXYZ(i, d.x, d.y, d.z); }
       pos.setXYZ(i, v.x, v.y, v.z);
+      // El dibujo de cada cara se calcula desde la posición FINAL del vértice. Con las UV originales, al redistribuir
+      // los vértices el dibujo se estiraba y los puntos salían deformados (cuadrados oscuros en el medio).
+      const ax = Math.abs(n0[i * 3]), ay = Math.abs(n0[i * 3 + 1]), az = Math.abs(n0[i * 3 + 2]);
+      let u, w;
+      if (ax >= ay && ax >= az) { const sg = Math.sign(n0[i * 3]); u = sg * -v.z + 0.5; w = v.y + 0.5; }
+      else if (ay >= az) { const sg = Math.sign(n0[i * 3 + 1]); u = v.x + 0.5; w = sg * -v.z + 0.5; }
+      else { const sg = Math.sign(n0[i * 3 + 2]); u = sg * v.x + 0.5; w = v.y + 0.5; }
+      uv.setXY(i, Math.min(1, Math.max(0, u)), Math.min(1, Math.max(0, w)));
     }
     geo.computeBoundingSphere();
     // orden de materiales de BoxGeometry: +x, -x, +y, -y, +z, -z

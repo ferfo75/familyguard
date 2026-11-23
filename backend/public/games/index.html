@@ -313,7 +313,7 @@
     mods: {},
     async get(type) {
       if (!this.mods[type]) {
-        const m = await import("./" + PLUG_FILES[type] + "?v=14");
+        const m = await import("./" + PLUG_FILES[type] + "?v=15");
         this.mods[type] = m.default(PAPI);
       }
       return this.mods[type];
