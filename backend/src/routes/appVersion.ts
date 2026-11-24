@@ -12,10 +12,10 @@ const CHILD_APP_VERSION = {
 };
 
 const PARENT_APP_VERSION = {
-  versionCode: 17,
-  versionName: "0.10.1",
+  versionCode: 18,
+  versionName: "0.10.2",
   downloadUrl: "/apks/familyguard-padre-latest.apk",
-  notes: "Alertas con sonido propio: el SOS suena como alarma y aparece en pantalla completa sobre cualquier app; \"voy en camino\", llegada a casa y llegada al colegio suenan distinto cada uno. Después de instalar, entrá a Más → Alertas en este celular y tocá Permitir en cada punto. Nuevo: en cada tarjeta de Familia hay un botón con la mira para pedir la ubicación ahora (despierta el celular del hijo/a).",
+  notes: "Nuevo: cada tarjeta de Familia muestra una línea de diagnóstico (cuándo fue el último latido del celular del hijo/a, qué versión de la app tiene y si puede recibir el aviso de despertar). El botón de la mira ahora responde enseguida y explica en un mensaje qué pasó (avisado, sin registrar, sin conexión, etc.). Incluye las alertas con sonido de SOS.",
 };
 
 // Las dos apps llaman esto al arrancar para saber si hay una versión más

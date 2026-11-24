@@ -41,6 +41,9 @@ data class ChildLatest(
     // Opcionales: un servidor viejo (o una caché vieja) no los trae.
     val lastHeartbeatAt: String? = null,
     val health: ChildHealth? = null,
+    // Diagnóstico del despertar por push (null en un servidor viejo).
+    val pushRegistered: Boolean? = null,
+    val lastWakeAt: String? = null,
 )
 data class LatestLocationsResponse(val children: List<ChildLatest>)
 

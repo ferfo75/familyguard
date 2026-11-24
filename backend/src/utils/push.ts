@@ -66,7 +66,11 @@ export function zoneKindFromName(name: string): "home" | "school" | "zone" {
 export async function sendWakePush(token: string): Promise<"ok" | "invalid" | "off" | "error"> {
   if (!messaging) return "off";
   try {
-    await messaging.send({ token, data: { kind: "wake" }, android: { priority: "high", ttl: 10 * 60_000 } });
+    // Con tope de 8 s: si Firebase no contesta, se devuelve "error" en vez de dejar colgado el pedido.
+    await Promise.race([
+      messaging.send({ token, data: { kind: "wake" }, android: { priority: "high", ttl: 10 * 60_000 } }),
+      new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error("timeout"), { code: "timeout" })), 8000)),
+    ]);
     return "ok";
   } catch (err: any) {
     const code = String(err?.code ?? "");

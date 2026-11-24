@@ -221,6 +221,9 @@ locationRouter.get("/latest", requireParentAuth, async (req, res) => {
         batteryLevel: child.batteryLevel,
         lastSeenAt: child.lastSeenAt,
         lastHeartbeatAt: child.lastHeartbeatAt,
+        // Diagnóstico: ¿el celular registró su token de avisos? ¿cuándo se le mandó el último aviso de despertar?
+        pushRegistered: child.fcmToken != null,
+        lastWakeAt: child.lastWakeAt,
         health: child.healthAt
           ? {
               batteryUnrestricted: child.healthBatteryUnrestricted,

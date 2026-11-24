@@ -95,11 +95,19 @@ fun HomeScreen(prefs: Prefs, onOpenChild: (ChildLatest) -> Unit) {
                             onDelete = { confirmDeleteChild = child },
                             onWake = {
                                 scope.launch {
+                                    // Respuesta inmediata: el pedido puede tardar hasta un minuto si el servidor estaba dormido.
+                                    Toast.makeText(context, "Avisando a ${child.childName}…", Toast.LENGTH_SHORT).show()
                                     val r = runCatching { ApiClient.create(prefs).wakeChild(child.childDeviceId) }.getOrNull()
+                                    val err = runCatching { r?.errorBody()?.string().orEmpty() }.getOrDefault("")
                                     val msg = when {
-                                        r?.isSuccessful == true -> "Aviso enviado a ${child.childName}. Si el celular está encendido, reporta en un minuto."
-                                        r?.code() == 409 -> "El celular de ${child.childName} todavía no se registró para recibir avisos. Abrí la app del hijo/a una vez."
-                                        else -> "No se pudo avisar. Puede estar apagado o sin datos."
+                                        r == null -> "No hubo conexión con el servidor. Probá de nuevo."
+                                        r.isSuccessful -> "Aviso enviado a ${child.childName}. Si el celular está encendido y con datos, reporta en un minuto."
+                                        r.code() == 409 -> "El celular de ${child.childName} todavía no se registró para recibir avisos. Abrí la app del hijo/a una vez (versión 0.9.0 o más nueva)."
+                                        r.code() == 401 -> "Se venció la sesión. Cerrá sesión y volvé a entrar."
+                                        err.contains("\"off\"") -> "El servidor no tiene los avisos (Firebase) configurados."
+                                        err.contains("\"invalid\"") -> "El aviso de ${child.childName} ya no sirve (se reinstaló la app). Abrila una vez en su celular."
+                                        err.contains("\"error\"") -> "Firebase no pudo entregar el aviso. Probá en un minuto."
+                                        else -> "No se pudo avisar (código ${r.code()})."
                                     }
                                     Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                     if (r?.isSuccessful == true) { delay(25_000); LatestRepository.refresh(prefs) }
@@ -171,6 +179,16 @@ private fun MemberCard(child: ChildLatest, color: androidx.compose.ui.graphics.C
                     Spacer(Modifier.height(4.dp))
                     Text("⚠ $issue", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
                 }
+                // Diagnóstico: dice si la app del hijo/a está viva (latido), qué versión tiene y si puede recibir el aviso de despertar.
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Latido ${if (child.lastHeartbeatAt == null) "nunca" else TimeAgo.text(child.lastHeartbeatAt, now)}" +
+                        " · app ${child.health?.appVersion ?: "sin datos"}" +
+                        " · avisos ${when (child.pushRegistered) { true -> "sí"; false -> "no"; null -> "?" }}" +
+                        (child.lastWakeAt?.let { " · despertar ${TimeAgo.text(it, now)}" } ?: ""),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             Column(horizontalAlignment = Alignment.End) {
                 child.batteryLevel?.let { BatteryChip(it) }
